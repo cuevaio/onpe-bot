@@ -137,7 +137,7 @@ export async function GET(request: Request) {
           style={{
             position: "absolute",
             right: 40,
-            top: 24,
+            top: 16,
             display: "flex",
             flexDirection: "column",
             alignItems: "flex-end",
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
           <div style={{ display: "flex", fontSize: 18, fontWeight: 500, color: "#606060" }}>
             Actualizado {formatOnpeUpdateTimestamp(layout.timestamp)}
           </div>
-          <div style={{ display: "flex", fontSize: 56, fontWeight: 700, marginTop: 8 }}>
+          <div style={{ display: "flex", fontSize: 52, fontWeight: 700, marginTop: 18 }}>
             {formatSummaryPercentage(layout.actasContabilizadas)}
           </div>
           <div style={{ display: "flex", fontSize: 18, fontWeight: 500, color: "#606060" }}>
@@ -279,6 +279,7 @@ export async function GET(request: Request) {
                 left: entry.centerX - 120,
                 top: entry.logoY + LOGO_SIZE + 8,
                 display: "flex",
+                justifyContent: "center",
                 width: 240,
                 textAlign: "center",
                 fontSize: 21,
@@ -289,6 +290,19 @@ export async function GET(request: Request) {
             </div>
           </div>
         ))}
+        <div
+          style={{
+            position: "absolute",
+            right: 40,
+            bottom: 24,
+            display: "flex",
+            fontSize: 16,
+            fontWeight: 500,
+            color: "#606060",
+          }}
+        >
+          elecciones.cueva.io
+        </div>
         </div>
       ),
       {
