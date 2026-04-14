@@ -20,6 +20,18 @@ const onpeSendResultsImagePayloadSchema = z.object({
     .optional(),
 });
 
+const SEND_IMAGE_BATCH_SIZE = 10;
+
+function chunkRecipients(recipients: string[], size: number) {
+  const batches: string[][] = [];
+
+  for (let index = 0; index < recipients.length; index += size) {
+    batches.push(recipients.slice(index, index + size));
+  }
+
+  return batches;
+}
+
 async function sendImageBatch(params: {
   recipients: string[];
   caption: string;
@@ -27,23 +39,35 @@ async function sendImageBatch(params: {
 }) {
   const failedRecipients: string[] = [];
 
-  for (const recipient of params.recipients) {
-    try {
-      await kapsoClient.messages.sendImage({
-        phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
-        to: recipient,
-        image: {
-          link: params.imageUrl,
-          caption: params.caption,
-        },
-      });
-    } catch (error) {
+  for (const recipientsBatch of chunkRecipients(
+    params.recipients,
+    SEND_IMAGE_BATCH_SIZE,
+  )) {
+    const results = await Promise.allSettled(
+      recipientsBatch.map((recipient) =>
+        kapsoClient.messages.sendImage({
+          phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
+          to: recipient,
+          image: {
+            link: params.imageUrl,
+            caption: params.caption,
+          },
+        }),
+      ),
+    );
+
+    for (const [index, result] of results.entries()) {
+      if (result.status === "fulfilled") {
+        continue;
+      }
+
+      const recipient = recipientsBatch[index];
       failedRecipients.push(recipient);
 
       logger.error("Failed to send ONPE results image", {
         recipient,
         url: params.imageUrl,
-        error: error instanceof Error ? error.message : String(error),
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       });
     }
   }
