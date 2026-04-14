@@ -11,6 +11,17 @@ import { getSenderState } from "@/lib/whatsapp-senders";
 import { sendWelcome } from "@/lib/whatsapp-tools";
 
 type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
+type NormalizedKapsoMessage = {
+  from?: string;
+  text?: { body?: unknown };
+  image?: { caption?: unknown };
+  video?: { caption?: unknown };
+  document?: { caption?: unknown };
+  kapso?: {
+    direction?: "inbound" | "outbound";
+    whatsappConversationId?: string;
+  };
+};
 
 export const runtime = "nodejs";
 
@@ -84,7 +95,61 @@ function readMessageText(message: Record<string, unknown>) {
       ? (message.text as { body?: unknown }).body
       : undefined;
 
-  return typeof text === "string" ? text.trim() : "";
+  if (typeof text === "string" && text.trim() !== "") {
+    return text.trim();
+  }
+
+  const imageCaption =
+    typeof message.image === "object" && message.image !== null
+      ? (message.image as { caption?: unknown }).caption
+      : undefined;
+
+  if (typeof imageCaption === "string" && imageCaption.trim() !== "") {
+    return imageCaption.trim();
+  }
+
+  const videoCaption =
+    typeof message.video === "object" && message.video !== null
+      ? (message.video as { caption?: unknown }).caption
+      : undefined;
+
+  if (typeof videoCaption === "string" && videoCaption.trim() !== "") {
+    return videoCaption.trim();
+  }
+
+  const documentCaption =
+    typeof message.document === "object" && message.document !== null
+      ? (message.document as { caption?: unknown }).caption
+      : undefined;
+
+  if (typeof documentCaption === "string" && documentCaption.trim() !== "") {
+    return documentCaption.trim();
+  }
+
+  return "";
+}
+
+function normalizePhoneNumber(value: string | undefined) {
+  return value?.replace(/\D/g, "") ?? "";
+}
+
+function getCurrentInboundMessage(
+  phoneNumber: string,
+  messages: NormalizedKapsoMessage[],
+) {
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  const inboundMessages = messages.filter(
+    (message) => message.kapso?.direction === "inbound",
+  );
+  const exactPhoneMatch = inboundMessages.filter(
+    (message) =>
+      normalizePhoneNumber(
+        typeof message.from === "string" ? message.from : undefined,
+      ) === normalizedPhoneNumber,
+  );
+  const source = exactPhoneMatch.length > 0 ? exactPhoneMatch : inboundMessages;
+
+  return source.at(-1) ?? null;
 }
 
 async function getConversationHistory(conversationId: string) {
@@ -92,14 +157,25 @@ async function getConversationHistory(conversationId: string) {
 		phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
 		conversationId,
 		limit: 12,
+		fields: "kapso(default)",
 	});
 
 	const messages: ConversationMessage[] = response.data
-		.map((message): ConversationMessage => ({
-			direction:
-				message.kapso?.direction === "outbound" ? "outbound" : "inbound",
-			text: readMessageText(message),
-		}))
+		.flatMap((message) => {
+			if (
+				message.kapso?.direction !== "inbound" &&
+				message.kapso?.direction !== "outbound"
+			) {
+				return [];
+			}
+
+			return [
+				{
+					direction: message.kapso.direction,
+					text: readMessageText(message),
+				} satisfies ConversationMessage,
+			];
+		})
 		.filter((message) => message.text.length > 0);
 
 	return messages;
@@ -145,14 +221,15 @@ export async function POST(request: Request) {
 			phoneNumber,
 		});
 		const normalized = normalizeWebhook(JSON.parse(rawBody));
-		const currentMessage = normalized.messages.find(
-			(message) => message.from?.trim() === phoneNumber,
+		const normalizedMessages = normalized.messages as NormalizedKapsoMessage[];
+		const currentMessage = getCurrentInboundMessage(
+			phoneNumber,
+			normalizedMessages,
 		);
 		const currentMessageText = currentMessage ? readMessageText(currentMessage) : "";
 
 		if (registration.senderInserted) {
 			await sendWelcome(phoneNumber);
-			return new Response("OK", { status: 200 });
 		}
 
 		if (registration.duplicate) {

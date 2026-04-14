@@ -54,6 +54,13 @@ export const sendOnpeResultsImage = schemaTask({
 
     if (recipients) {
       const recipientStates = await getRecipientStates(recipients);
+
+      if (!topCount && recipientStates.length > 1) {
+        throw new Error(
+          "Explicit recipient sends with multiple recipients must provide topCount",
+        );
+      }
+
       const recipientTopCount = topCount ?? recipientStates[0]?.preferredTopCount ?? 3;
       const resolvedImageUrl = imageUrl ?? (await ensureLatestOnpeImageUrl(recipientTopCount));
 
