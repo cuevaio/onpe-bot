@@ -29,6 +29,7 @@ import {
 } from "@/lib/onpe";
 
 export const runtime = "nodejs";
+export const maxDuration = 900;
 
 let fontDataPromise: Promise<ArrayBuffer> | null = null;
 

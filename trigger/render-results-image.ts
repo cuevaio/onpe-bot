@@ -6,7 +6,7 @@ import { onpeResultsImagePayloadSchema } from "@/lib/render-results";
 export const renderOnpeResultsImage = schemaTask({
   id: "render-onpe-results-image",
   schema: onpeResultsImagePayloadSchema,
-  maxDuration: 300,
+  maxDuration: 900,
   queue: {
     concurrencyLimit: 1,
   },
