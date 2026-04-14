@@ -1,12 +1,14 @@
 import { logger, schemaTask } from "@trigger.dev/sdk/v3";
 import { put } from "@vercel/blob";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import sharp from "sharp";
 import { z } from "zod";
 
 import { setLatestOnpeImageUrl } from "@/lib/cache";
 import {
 	formatOnpeUpdateTimestamp,
-	LATEST_RESULTS_IMAGE_PATH,
+	RESULTS_IMAGE_DIRECTORY,
 	LATEST_SNAPSHOT_PATH,
 	LATEST_SUMMARY_PATH,
 	ONPE_REFERER,
@@ -33,6 +35,7 @@ const GRID_COLOR = "#d3d3d3";
 const TEXT_COLOR = "#262626";
 const TITLE = "Resultados presidenciales";
 const SUBTITLE = "Votos validos";
+const FONT_PATH = path.join(process.cwd(), "node_modules/sharp/fonts/DejaVuSans.ttf");
 const ONPE_ASSET_HEADERS = {
 	accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
 	referer: ONPE_REFERER,
@@ -94,6 +97,8 @@ type SummaryDisplay = {
 
 type AssetKind = "candidate photo" | "party logo";
 
+let embeddedFontCss: string | null = null;
+
 function escapeXml(value: string) {
 	return value
 		.replaceAll("&", "&amp;")
@@ -101,6 +106,29 @@ function escapeXml(value: string) {
 		.replaceAll(">", "&gt;")
 		.replaceAll('"', "&quot;")
 		.replaceAll("'", "&apos;");
+}
+
+async function getEmbeddedFontCss() {
+	if (embeddedFontCss) {
+		return embeddedFontCss;
+	}
+
+	const fontBuffer = await readFile(FONT_PATH);
+	const fontBase64 = fontBuffer.toString("base64");
+
+	embeddedFontCss = `
+		@font-face {
+			font-family: "OnpeChartFont";
+			src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
+			font-weight: 400 700;
+			font-style: normal;
+		}
+		text {
+			font-family: "OnpeChartFont", sans-serif;
+		}
+	`;
+
+	return embeddedFontCss;
 }
 
 function buildCandidatePhotoUrl(dniCandidato: string) {
@@ -389,6 +417,7 @@ function buildChartSvg(
 	payload: OnpeResultsImagePayload,
 	entries: RenderEntry[],
 	summary: SummaryDisplay,
+	fontCss: string,
 ) {
 	const maxVotes = Math.max(
 		...entries.map((entry) => entry.totalVotosValidos),
@@ -482,6 +511,7 @@ function buildChartSvg(
 
 	return `
   <svg width="${IMAGE_WIDTH}" height="${IMAGE_HEIGHT}" viewBox="0 0 ${IMAGE_WIDTH} ${IMAGE_HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <style>${fontCss}</style>
     <rect width="${IMAGE_WIDTH}" height="${IMAGE_HEIGHT}" fill="${BACKGROUND_COLOR}" />
 	    <text x="40" y="44" font-size="32" font-weight="700" fill="${TEXT_COLOR}">${title}</text>
 	    <text x="40" y="76" font-size="18" font-weight="500" fill="#606060">${subtitle}</text>
@@ -504,7 +534,10 @@ export const renderOnpeResultsImage = schemaTask({
 	run: async (payload) => {
 		const { entries, totalEntries, candidateEntries } =
 			await readLatestSnapshotEntries(payload.snapshot);
-		const summary = await readLatestSummary();
+		const [summary, fontCss] = await Promise.all([
+			readLatestSummary(),
+			getEmbeddedFontCss(),
+		]);
 
 		logger.info("Rendering ONPE results image", {
 			snapshotPath: LATEST_SNAPSHOT_PATH,
@@ -520,9 +553,10 @@ export const renderOnpeResultsImage = schemaTask({
 			entries.map((entry, index) => buildRenderEntry(entry, index)),
 		);
 		const createdAt = new Date().toISOString();
-		const svg = buildChartSvg(payload, renderEntries, summary);
+		const svg = buildChartSvg(payload, renderEntries, summary, fontCss);
 		const imageBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
-		const blob = await put(LATEST_RESULTS_IMAGE_PATH, imageBuffer, {
+		const timestampedPath = `${RESULTS_IMAGE_DIRECTORY}/chart-${summary.fechaActualizacion}.png`;
+		const blob = await put(timestampedPath, imageBuffer, {
 			access: "public",
 			allowOverwrite: true,
 			addRandomSuffix: false,

@@ -16,16 +16,13 @@ export const LATEST_SNAPSHOT_PATH = "onpe/latest.json";
 
 export const LATEST_SUMMARY_PATH = "onpe/latest-summary.json";
 
-export const LATEST_RESULTS_IMAGE_PATH = "onpe/charts/chart-latest.png";
+export const RESULTS_IMAGE_DIRECTORY = "onpe/charts";
 
 export const LATEST_SNAPSHOT_URL =
   `${ONPE_BLOB_BASE_URL}/${LATEST_SNAPSHOT_PATH}`;
 
 export const LATEST_SUMMARY_URL =
   `${ONPE_BLOB_BASE_URL}/${LATEST_SUMMARY_PATH}`;
-
-export const LATEST_RESULTS_IMAGE_URL =
-  `${ONPE_BLOB_BASE_URL}/${LATEST_RESULTS_IMAGE_PATH}`;
 
 export const ALERT_RECIPIENT = "+51912851377";
 

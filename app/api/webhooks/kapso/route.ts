@@ -6,7 +6,6 @@ import { getDb } from "@/db";
 import { env } from "@/env";
 import { getLatestOnpeImageUrl } from "@/lib/cache";
 import { kapsoClient } from "@/lib/kapso";
-import { LATEST_RESULTS_IMAGE_URL } from "@/lib/onpe";
 
 export const runtime = "nodejs";
 
@@ -115,7 +114,11 @@ export async function POST(request: Request) {
 		});
 
 		if (registration.senderInserted) {
-			const imageUrl = (await getLatestOnpeImageUrl()) ?? LATEST_RESULTS_IMAGE_URL;
+			const imageUrl = await getLatestOnpeImageUrl();
+
+			if (!imageUrl) {
+				throw new Error("No cached ONPE image URL available for new user welcome message");
+			}
 
 			await kapsoClient.messages.sendImage({
 				phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,

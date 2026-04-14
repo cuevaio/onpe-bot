@@ -5,8 +5,8 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { kapsoWebhookDeliveries, whatsappSenders } from "@/db/schema";
 import { env } from "@/env";
+import { getLatestOnpeImageUrl } from "@/lib/cache";
 import { kapsoClient } from "@/lib/kapso";
-import { LATEST_RESULTS_IMAGE_URL } from "@/lib/onpe";
 
 const RECEIVED_EVENT = "whatsapp.message.received";
 const CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -70,7 +70,13 @@ export const sendOnpeResultsImage = schemaTask({
   id: "send-onpe-results-image",
   schema: onpeSendResultsImagePayloadSchema,
   maxDuration: 300,
-  run: async ({ recipients, caption, imageUrl = LATEST_RESULTS_IMAGE_URL }) => {
+  run: async ({ recipients, caption, imageUrl }) => {
+    const resolvedImageUrl = imageUrl ?? (await getLatestOnpeImageUrl());
+
+    if (!resolvedImageUrl) {
+      throw new Error("No cached ONPE image URL available for WhatsApp send");
+    }
+
     const resolvedRecipients = recipients
       ? {
           allRecipients: recipients,
@@ -86,7 +92,7 @@ export const sendOnpeResultsImage = schemaTask({
           phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
           to: recipient,
           image: {
-            link: imageUrl,
+            link: resolvedImageUrl,
             caption,
           },
         });
@@ -95,7 +101,7 @@ export const sendOnpeResultsImage = schemaTask({
 
         logger.error("Failed to send ONPE results image", {
           recipient,
-          url: imageUrl,
+          url: resolvedImageUrl,
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -106,7 +112,7 @@ export const sendOnpeResultsImage = schemaTask({
       sent: resolvedRecipients.activeRecipients.length - failedRecipients.length,
       skipped: resolvedRecipients.skippedRecipients.length,
       failed: failedRecipients.length,
-      url: imageUrl,
+      url: resolvedImageUrl,
     });
 
     return {
@@ -115,7 +121,7 @@ export const sendOnpeResultsImage = schemaTask({
         resolvedRecipients.activeRecipients.length - failedRecipients.length,
       skippedRecipients: resolvedRecipients.skippedRecipients.length,
       failedRecipients: failedRecipients.length,
-      url: imageUrl,
+      url: resolvedImageUrl,
     };
   },
 });

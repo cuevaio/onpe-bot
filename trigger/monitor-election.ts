@@ -1,7 +1,7 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
 
 import {
-  LATEST_RESULTS_IMAGE_PATH,
+  RESULTS_IMAGE_DIRECTORY,
   LATEST_SNAPSHOT_PATH,
   LATEST_SUMMARY_PATH,
   type OnpeSummaryMetadata,
@@ -125,7 +125,7 @@ export const monitorOnpeElection = schedules.task({
       nextBytes: latestBytes,
       snapshotPath: LATEST_SNAPSHOT_PATH,
       summaryPath: LATEST_SUMMARY_PATH,
-      imagePath: LATEST_RESULTS_IMAGE_PATH,
+      imageDirectory: RESULTS_IMAGE_DIRECTORY,
     });
 
     const updatedAt = latestSummary.fechaActualizacion;
