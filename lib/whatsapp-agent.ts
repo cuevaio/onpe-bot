@@ -3,6 +3,7 @@ import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 
 import type { OnpeTopCount } from "@/lib/cache";
+import type { DeterministicCommandAction } from "@/lib/whatsapp-command-router";
 import type { SenderState } from "@/lib/whatsapp-senders";
 import {
 	pauseUpdates,
@@ -23,7 +24,7 @@ export async function handleInboundMessageWithAgent(params: {
 	currentMessage: string;
 	recentMessages: ConversationMessage[];
 }) {
-	await generateText({
+	const result = await generateText({
 		model: openai.chat("gpt-5.4"),
 		prompt: [
 			`Current sender state: active=${params.senderState.active}, preferredTopCount=${params.senderState.preferredTopCount}.`,
@@ -93,10 +94,7 @@ export async function handleInboundMessageWithAgent(params: {
 				}),
 				strict: true,
 				execute: async ({ topCount }) => {
-					await setChartPreference(
-						params.phoneNumber,
-						topCount as OnpeTopCount,
-					);
+					await setChartPreference(params.phoneNumber, topCount as OnpeTopCount);
 					return { action: "set_chart_preference", topCount };
 				},
 			}),
@@ -112,4 +110,45 @@ export async function handleInboundMessageWithAgent(params: {
 			}),
 		},
 	});
+
+	const selectedTool = result.steps
+		.flatMap((step) => step.toolCalls)
+		.at(-1);
+
+	if (!selectedTool) {
+		return { type: "none" } satisfies DeterministicCommandAction;
+	}
+
+	if (selectedTool.toolName === "set_chart_preference") {
+		const topCount =
+			typeof selectedTool.input === "object" &&
+			selectedTool.input !== null &&
+			"topCount" in selectedTool.input &&
+			(selectedTool.input as { topCount?: unknown }).topCount === 5
+				? 5
+				: 3;
+
+		return {
+			type: "set_chart_preference",
+			topCount,
+		} satisfies DeterministicCommandAction;
+	}
+
+	if (selectedTool.toolName === "pause_updates") {
+		return { type: "pause_updates" } satisfies DeterministicCommandAction;
+	}
+
+	if (selectedTool.toolName === "resume_updates") {
+		return { type: "resume_updates" } satisfies DeterministicCommandAction;
+	}
+
+	if (selectedTool.toolName === "send_latest_chart") {
+		return { type: "send_latest_chart" } satisfies DeterministicCommandAction;
+	}
+
+	if (selectedTool.toolName === "send_help") {
+		return { type: "send_help" } satisfies DeterministicCommandAction;
+	}
+
+	return { type: "none" } satisfies DeterministicCommandAction;
 }

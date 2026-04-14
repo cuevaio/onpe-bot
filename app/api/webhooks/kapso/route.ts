@@ -5,13 +5,18 @@ import { normalizeWebhook } from "@kapso/whatsapp-cloud-api/server";
 
 import { getDb } from "@/db";
 import { env } from "@/env";
+import {
+  parseDeterministicCommand,
+  type DeterministicCommandAction,
+} from "@/lib/whatsapp-command-router";
 import { handleInboundMessageWithAgent } from "@/lib/whatsapp-agent";
 import { kapsoClient } from "@/lib/kapso";
 import { getSenderState } from "@/lib/whatsapp-senders";
-import { sendWelcome } from "@/lib/whatsapp-tools";
+import { executeWhatsappAction, sendWelcome } from "@/lib/whatsapp-tools";
 
 type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
 type NormalizedKapsoMessage = {
+  id?: string;
   from?: string;
   text?: { body?: unknown };
   image?: { caption?: unknown };
@@ -181,6 +186,36 @@ async function getConversationHistory(conversationId: string) {
 	return messages;
 }
 
+function getProviderMessageId(message: NormalizedKapsoMessage | null) {
+  return typeof message?.id === "string" && message.id.trim() !== ""
+    ? message.id.trim()
+    : null;
+}
+
+function logWebhookEvent(event: string, metadata: Record<string, unknown>) {
+  console.info(`[kapso-webhook] ${event}`, metadata);
+}
+
+function toExecutableAction(
+  action: DeterministicCommandAction,
+  senderTopCount: 3 | 5,
+) {
+  switch (action.type) {
+    case "pause_updates":
+      return action;
+    case "resume_updates":
+      return { type: "resume_updates", topCount: senderTopCount } as const;
+    case "send_latest_chart":
+      return { type: "send_latest_chart", topCount: senderTopCount } as const;
+    case "set_chart_preference":
+      return action;
+    case "send_help":
+      return action;
+    case "none":
+      return action;
+  }
+}
+
 export async function POST(request: Request) {
 	const signature = request.headers.get("x-webhook-signature")?.trim();
 	const idempotencyKey = request.headers.get("x-idempotency-key")?.trim();
@@ -227,12 +262,33 @@ export async function POST(request: Request) {
 			normalizedMessages,
 		);
 		const currentMessageText = currentMessage ? readMessageText(currentMessage) : "";
+		const providerMessageId = getProviderMessageId(currentMessage);
+
+		logWebhookEvent("received", {
+			idempotencyKey,
+			eventType,
+			phoneNumber,
+			providerMessageId,
+			duplicate: registration.duplicate,
+			senderInserted: registration.senderInserted,
+			currentMessageText,
+		});
 
 		if (registration.senderInserted) {
 			await sendWelcome(phoneNumber);
+			logWebhookEvent("welcome_sent", {
+				idempotencyKey,
+				phoneNumber,
+				providerMessageId,
+			});
 		}
 
 		if (registration.duplicate) {
+			logWebhookEvent("skipped_duplicate", {
+				idempotencyKey,
+				phoneNumber,
+				providerMessageId,
+			});
 			return new Response("OK", { status: 200 });
 		}
 
@@ -248,15 +304,57 @@ export async function POST(request: Request) {
 			: currentMessageText
 				? [{ direction: "inbound" as const, text: currentMessageText }]
 				: [];
+		const deterministicAction = parseDeterministicCommand(currentMessageText);
+		let finalAction = deterministicAction;
+		let llmInvoked = false;
 
-		await handleInboundMessageWithAgent({
+		if (deterministicAction.type === "none") {
+			llmInvoked = true;
+			finalAction = await handleInboundMessageWithAgent({
+				phoneNumber,
+				senderState,
+				currentMessage: currentMessageText,
+				recentMessages,
+			});
+		}
+
+		logWebhookEvent("action_selected", {
+			idempotencyKey,
 			phoneNumber,
-			senderState,
-			currentMessage: currentMessageText,
-			recentMessages,
+			providerMessageId,
+			deterministicAction,
+			llmInvoked,
+			finalAction,
+		});
+
+		const executableAction = toExecutableAction(
+			finalAction,
+			senderState.preferredTopCount,
+		);
+
+		if (executableAction.type === "none") {
+			logWebhookEvent("no_action_selected", {
+				idempotencyKey,
+				phoneNumber,
+				providerMessageId,
+				currentMessageText,
+			});
+			return new Response("OK", { status: 200 });
+		}
+
+		await executeWhatsappAction({
+			phoneNumber,
+			action: executableAction,
+		});
+
+		logWebhookEvent("action_executed", {
+			idempotencyKey,
+			phoneNumber,
+			providerMessageId,
+			executedAction: executableAction,
 		});
 	} catch (error) {
-		console.error("Failed to persist Kapso sender", {
+		console.error("Failed to process Kapso sender", {
 			eventType,
 			idempotencyKey,
 			phoneNumber,

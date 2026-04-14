@@ -18,6 +18,34 @@ export async function sendTextReply(phoneNumber: string, body: string) {
   });
 }
 
+export async function executeWhatsappAction(params: {
+  phoneNumber: string;
+  action:
+    | { type: "pause_updates" }
+    | { type: "resume_updates"; topCount: OnpeTopCount }
+    | { type: "send_latest_chart"; topCount: OnpeTopCount }
+    | { type: "set_chart_preference"; topCount: OnpeTopCount }
+    | { type: "send_help" };
+}) {
+  switch (params.action.type) {
+    case "pause_updates":
+      await pauseUpdates(params.phoneNumber);
+      return;
+    case "resume_updates":
+      await resumeUpdates(params.phoneNumber, params.action.topCount);
+      return;
+    case "send_latest_chart":
+      await sendLatestChart(params.phoneNumber, params.action.topCount);
+      return;
+    case "set_chart_preference":
+      await setChartPreference(params.phoneNumber, params.action.topCount);
+      return;
+    case "send_help":
+      await sendHelp(params.phoneNumber);
+      return;
+  }
+}
+
 export async function pauseUpdates(phoneNumber: string) {
   await setSenderActive(phoneNumber, false);
   await sendTextReply(phoneNumber, PAUSED_MESSAGE);
