@@ -33,12 +33,25 @@ export async function handleInboundMessageWithAgent(params: {
 			`Current inbound message: ${params.currentMessage}`,
 		].join("\n\n"),
 		system:
-			"You route a WhatsApp ONPE bot. Always use one tool. Use the full conversation context. If the user wants to pause updates, use pause_updates. If they want to resume updates, use resume_updates. If they ask for the latest chart, use send_latest_chart. If they want top 3 or top 5, use set_chart_preference with the right topCount. If the request is unclear or not text-friendly, use send_help. Do not answer without a tool.",
+			[
+				"You route a WhatsApp ONPE bot.",
+				"Always call exactly one tool.",
+				"Treat short commands as valid, not ambiguous.",
+				"Examples that MUST map to set_chart_preference: 'top 5', 'top5', 'quiero top 5', 'quiero recibir el top 5', 'mandame el top 5', 'top 3', 'top3'.",
+				"Examples that MUST map to send_latest_chart: 'ultimo chart', 'latest chart', 'manda el chart', 'envia la imagen'.",
+				"Examples that MUST map to pause_updates: 'pausa', 'stop', 'no quiero updates', 'deja de enviar'.",
+				"Examples that MUST map to resume_updates: 'reactiva', 'reanuda', 'resume', 'quiero updates otra vez'.",
+				"Use send_help only when the user is explicitly asking what the bot can do or asking for instructions/help.",
+				"Examples that MUST map to send_help: 'que puedes hacer?', 'ayuda', 'help', 'como funciona?', 'que comandos hay?'.",
+				"If the message is vague but still mentions top 3, top 5, pausing, resuming, or charts, do not use send_help; choose the closest action tool.",
+				"Do not use send_help for clear commands like 'top 5'.",
+			].join(" "),
 		stopWhen: stepCountIs(1),
+		toolChoice: "required",
 		tools: {
 			pause_updates: tool({
 				description:
-					"Pause future broadcasts for this sender and send the fixed paused confirmation.",
+					"Use when the user wants to stop receiving automatic updates. Examples: 'pausa', 'stop', 'no quiero updates', 'deja de enviar'.",
 				inputSchema: z.object({}),
 				strict: true,
 				execute: async () => {
@@ -48,7 +61,7 @@ export async function handleInboundMessageWithAgent(params: {
 			}),
 			resume_updates: tool({
 				description:
-					"Resume future broadcasts and immediately send the latest chart using the stored preference.",
+					"Use when the user wants to receive automatic updates again. Examples: 'reactiva', 'reanuda', 'resume', 'quiero updates otra vez'.",
 				inputSchema: z.object({}),
 				strict: true,
 				execute: async () => {
@@ -61,7 +74,7 @@ export async function handleInboundMessageWithAgent(params: {
 			}),
 			send_latest_chart: tool({
 				description:
-					"Send the latest chart immediately without changing broadcast preferences.",
+					"Use when the user asks for the current image/chart without changing preference. Examples: 'ultimo chart', 'latest chart', 'manda el chart', 'envia la imagen'.",
 				inputSchema: z.object({}),
 				strict: true,
 				execute: async () => {
@@ -74,7 +87,7 @@ export async function handleInboundMessageWithAgent(params: {
 			}),
 			set_chart_preference: tool({
 				description:
-					"Persist the chart preference as top 3 or top 5 and immediately send that chart variant.",
+					"Use when the user asks for top 3 or top 5. This updates preferred_top_count and immediately sends that variant. Examples: 'top 5', 'top5', 'quiero top 5', 'quiero recibir el top 5', 'mandame top 5', 'top 3', 'top3'.",
 				inputSchema: z.object({
 					topCount: z.union([z.literal(3), z.literal(5)]),
 				}),
@@ -88,7 +101,8 @@ export async function handleInboundMessageWithAgent(params: {
 				},
 			}),
 			send_help: tool({
-				description: "Send the fixed help/configuration message.",
+				description:
+					"Use only when the user explicitly asks what the bot can do or asks for help/instructions. Examples: 'que puedes hacer?', 'ayuda', 'help', 'como funciona?', 'que comandos hay?'. Do not use for top 3, top 5, pause/resume, or latest chart requests.",
 				inputSchema: z.object({}),
 				strict: true,
 				execute: async () => {
