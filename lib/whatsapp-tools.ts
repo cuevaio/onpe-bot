@@ -10,6 +10,9 @@ const PAUSED_MESSAGE =
 const HELP_MESSAGE =
   "Puedes pedirme el ultimo chart, elegir top 3 o top 5, pausar updates o reactivarlos cuando quieras.";
 
+const WELCOME_MESSAGE =
+  "Hola. Este es el top 3 actual. Puedes elegir top 3 o top 5, pedirme el ultimo chart, pausar updates, o reactivarlos cuando quieras.";
+
 export async function sendTextReply(phoneNumber: string, body: string) {
   await kapsoClient.messages.sendText({
     phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
@@ -86,8 +89,9 @@ export async function sendHelp(phoneNumber: string) {
 }
 
 export async function sendWelcome(phoneNumber: string) {
-  await sendTextReply(
+  await sendLatestChartToRecipient({
     phoneNumber,
-    "Hola. Puedes elegir top 3 o top 5, pedirme el ultimo chart, pausar updates, o reactivarlos cuando quieras.",
-  );
+    topCount: 3,
+    caption: WELCOME_MESSAGE,
+  });
 }
