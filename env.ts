@@ -13,7 +13,9 @@ export const env = createEnv({
 		UPSTASH_REDIS_REST_URL: z.string().url(),
 		UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
 	},
-	client: {},
+  client: {
+  		NEXT_PUBLIC_APP_URL: z.string().url(),
+	},
 	runtimeEnv: {
 		OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 		BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
@@ -23,6 +25,7 @@ export const env = createEnv({
 		KAPSO_PHONE_NUMBER_ID: process.env.KAPSO_PHONE_NUMBER_ID,
 		ONPE_RESULTS_FONT_URL: process.env.ONPE_RESULTS_FONT_URL,
 		UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-		UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 	},
 });

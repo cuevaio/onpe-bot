@@ -332,16 +332,18 @@ export function buildChartLayout(
   const maxVotes = Math.max(...entries.map((entry) => entry.totalVotosValidos), 0);
   const safeMaxVotes = maxVotes || 1;
   const ticks = buildTicks(maxVotes || safeMaxVotes);
-  const availableWidth = CHART_RIGHT - CHART_LEFT;
-  const barGap = entries.length === 1 ? 0 : 58;
-  const maxBarWidth = 330;
+  const chartLeft = payload.topCount === 5 ? 180 : CHART_LEFT;
+  const chartRight = payload.topCount === 5 ? IMAGE_WIDTH - 170 : CHART_RIGHT;
+  const availableWidth = chartRight - chartLeft;
+  const barGap = entries.length === 1 ? 0 : payload.topCount === 5 ? 42 : 58;
+  const maxBarWidth = payload.topCount === 5 ? 280 : 330;
   const barWidth = Math.min(
     maxBarWidth,
     (availableWidth - barGap * Math.max(entries.length - 1, 0)) / entries.length,
   );
   const groupWidth =
     barWidth * entries.length + barGap * Math.max(entries.length - 1, 0);
-  const groupLeft = CHART_LEFT + (availableWidth - groupWidth) / 2;
+  const groupLeft = chartLeft + (availableWidth - groupWidth) / 2;
 
   return {
     title: payload.title ?? TITLE,

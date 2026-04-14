@@ -120,6 +120,10 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
     getFontData(),
   ]);
   const layout = buildChartLayout(payload, renderEntries, summary);
+  const isTopFive = payload.topCount === 5;
+  const barTextWidth = isTopFive ? 280 : 240;
+  const totalFontSize = isTopFive ? 39 : 45;
+  const percentageFontSize = isTopFive ? 24 : 29;
 
   return new ImageResponse(
     (
@@ -246,12 +250,13 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
           <div
             style={{
               position: "absolute",
-              left: entry.centerX - 120,
+              left: entry.centerX - barTextWidth / 2,
               top: entry.totalY - 36,
               display: "flex",
-              width: 240,
+              width: barTextWidth,
               textAlign: "center",
-              fontSize: 45,
+              justifyContent: "center",
+              fontSize: totalFontSize,
               fontWeight: 700,
               color: entry.barTextColor,
             }}
@@ -261,12 +266,13 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
           <div
             style={{
               position: "absolute",
-              left: entry.centerX - 120,
+              left: entry.centerX - barTextWidth / 2,
               top: entry.percentageY - 24,
               display: "flex",
-              width: 240,
+              width: barTextWidth,
               textAlign: "center",
-              fontSize: 29,
+              justifyContent: "center",
+              fontSize: percentageFontSize,
               fontWeight: 600,
               color: entry.barTextColor,
             }}
