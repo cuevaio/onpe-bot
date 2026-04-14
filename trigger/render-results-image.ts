@@ -1,7 +1,5 @@
 import { logger, schemaTask } from "@trigger.dev/sdk/v3";
 import { put } from "@vercel/blob";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
 import { z } from "zod";
 
@@ -35,10 +33,8 @@ const GRID_COLOR = "#d3d3d3";
 const TEXT_COLOR = "#262626";
 const TITLE = "Resultados presidenciales";
 const SUBTITLE = "Votos validos";
-const FONT_PATH = path.join(
-	process.cwd(),
-	"assets/fonts/Geist-Regular.ttf",
-);
+const FONT_URL =
+	"https://raw.githubusercontent.com/vercel/next.js/canary/packages/next/src/compiled/@vercel/og/Geist-Regular.ttf";
 const ONPE_ASSET_HEADERS = {
 	accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
 	referer: ONPE_REFERER,
@@ -116,15 +112,18 @@ async function getEmbeddedFontCss() {
 		return embeddedFontCss;
 	}
 
-	let fontBuffer: Buffer;
+	const response = await fetch(FONT_URL, {
+		cache: "force-cache",
+		signal: AbortSignal.timeout(10_000),
+	});
 
-	try {
-		fontBuffer = await readFile(FONT_PATH);
-	} catch (error) {
+	if (!response.ok) {
 		throw new Error(
-			`Unable to read bundled chart font at ${FONT_PATH}: ${error instanceof Error ? error.message : String(error)}`,
+			`Unable to fetch chart font from ${FONT_URL}: ${response.status} ${response.statusText}`,
 		);
 	}
+
+	const fontBuffer = Buffer.from(await response.arrayBuffer());
 	const fontBase64 = fontBuffer.toString("base64");
 
 	embeddedFontCss = `
