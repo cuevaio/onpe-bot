@@ -16,6 +16,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@trigger.dev/sdk": "4.4.4",
+    "@upstash/redis": "^1.37.0",
     "@vercel/blob": "^2.3.3",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.3",

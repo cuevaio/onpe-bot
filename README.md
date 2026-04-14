@@ -47,6 +47,8 @@ DATABASE_URL=
 KAPSO_WEBHOOK_SECRET=
 KAPSO_API_KEY=
 KAPSO_PHONE_NUMBER_ID=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 ```
 
 ## Local Development
@@ -111,3 +113,4 @@ Key tasks:
 - ONPE freshness is determined only by `fechaActualizacion`.
 - The image uses `actasContabilizadas` from the summary endpoint as the main headline stat.
 - The latest image is regenerated immediately after each detected ONPE update and on first initialization.
+- The latest generated image URL is cached in Upstash Redis and reused for new-user welcome messages.

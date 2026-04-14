@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { env } from "@/env";
+import { getLatestOnpeImageUrl } from "@/lib/cache";
 import { kapsoClient } from "@/lib/kapso";
 import { LATEST_RESULTS_IMAGE_URL } from "@/lib/onpe";
 
@@ -114,11 +115,13 @@ export async function POST(request: Request) {
 		});
 
 		if (registration.senderInserted) {
+			const imageUrl = (await getLatestOnpeImageUrl()) ?? LATEST_RESULTS_IMAGE_URL;
+
 			await kapsoClient.messages.sendImage({
 				phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
 				to: phoneNumber,
 				image: {
-					link: LATEST_RESULTS_IMAGE_URL,
+					link: imageUrl,
 					caption: `Bienvenido. Estos son los ultimos resultados presidenciales de ONPE.
             Te enviaremos actualizaciones automáticamente.`,
 				},

@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 import sharp from "sharp";
 import { z } from "zod";
 
+import { setLatestOnpeImageUrl } from "@/lib/cache";
 import {
 	formatOnpeUpdateTimestamp,
 	LATEST_RESULTS_IMAGE_PATH,
@@ -533,6 +534,8 @@ export const renderOnpeResultsImage = schemaTask({
 			url: blob.url,
 			renderedEntries: renderEntries.length,
 		});
+
+		await setLatestOnpeImageUrl(blob.url);
 
 		return {
 			createdAt,

@@ -51,9 +51,22 @@ async function renderLatestOnpeResultsImage() {
   return renderResult.output;
 }
 
+async function sendLatestOnpeChangeAlert(updatedAt: number, imageUrl: string) {
+  const alertResult = await sendOnpeChangeAlert.triggerAndWait({
+    updatedAt,
+    imageUrl,
+  });
+
+  if (!alertResult.ok) {
+    throw alertResult.error;
+  }
+
+  return alertResult.output;
+}
+
 export const monitorOnpeElection = schedules.task({
   id: "monitor-onpe-election",
-  cron: "*/2 * * * *",
+  cron: "*/5 * * * *",
   maxDuration: 300,
   queue: {
     concurrencyLimit: 1,
@@ -76,14 +89,11 @@ export const monitorOnpeElection = schedules.task({
 
     if (previousSummary === null) {
       await storeLatestOnpeData(latestSummary);
-      await renderLatestOnpeResultsImage();
-      const alertResult = await sendOnpeChangeAlert.triggerAndWait({
-        updatedAt: latestSummary.fechaActualizacion,
-      });
-
-      if (!alertResult.ok) {
-        throw alertResult.error;
-      }
+      const imageResult = await renderLatestOnpeResultsImage();
+      await sendLatestOnpeChangeAlert(
+        latestSummary.fechaActualizacion,
+        imageResult.url,
+      );
 
       return {
         changed: false,
@@ -107,7 +117,7 @@ export const monitorOnpeElection = schedules.task({
     }
 
     const { latestBytes } = await storeLatestOnpeData(latestSummary);
-    await renderLatestOnpeResultsImage();
+    const imageResult = await renderLatestOnpeResultsImage();
 
     logger.warn("ONPE snapshot changed", {
       fechaActualizacion: latestSummary.fechaActualizacion,
@@ -119,11 +129,7 @@ export const monitorOnpeElection = schedules.task({
     });
 
     const updatedAt = latestSummary.fechaActualizacion;
-    const alertResult = await sendOnpeChangeAlert.triggerAndWait({ updatedAt });
-
-    if (!alertResult.ok) {
-      throw alertResult.error;
-    }
+    await sendLatestOnpeChangeAlert(updatedAt, imageResult.url);
 
     return {
       changed: true,
