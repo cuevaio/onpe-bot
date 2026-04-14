@@ -54,7 +54,7 @@ async function sendImageBatch(params: {
 export const sendOnpeResultsImage = schemaTask({
   id: "send-onpe-results-image",
   schema: onpeSendResultsImagePayloadSchema,
-  maxDuration: 300,
+  maxDuration: 900,
   run: async ({ recipients, caption, imageUrl, topCount, imageUrlsByTopCount }) => {
     const failedRecipients: string[] = [];
 

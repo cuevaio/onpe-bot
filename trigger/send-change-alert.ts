@@ -13,7 +13,7 @@ export const sendOnpeChangeAlert = schemaTask({
       5: z.string().url(),
     }),
   }),
-  maxDuration: 300,
+  maxDuration: 900,
   run: async ({ updatedAt, imageUrlsByTopCount }) => {
     const formattedUpdatedAt = formatOnpeUpdateTimestamp(updatedAt);
 
