@@ -20,9 +20,12 @@ import {
   PHOTO_SIZE,
   TEXT_COLOR,
 } from "@/lib/render-results";
-import { formatOnpeUpdateTimestamp } from "@/lib/onpe";
-import { readOnpeSnapshot } from "@/trigger/read-snapshot";
-import { readOnpeSummaryMetadata } from "@/trigger/read-summary-metadata";
+import {
+  formatOnpeUpdateTimestamp,
+  LATEST_SNAPSHOT_URL,
+  LATEST_SUMMARY_URL,
+  onpeSummaryMetadataSchema,
+} from "@/lib/onpe";
 
 export const runtime = "nodejs";
 
@@ -48,36 +51,42 @@ async function getFontData() {
 }
 
 async function readImageInputs(snapshotOverride?: string) {
+  const readSnapshotPromise = snapshotOverride
+    ? Promise.resolve(snapshotOverride)
+    : fetch(LATEST_SNAPSHOT_URL, {
+        cache: "no-store",
+      }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch ONPE snapshot blob: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        return response.text();
+      });
+
   const [summaryResult, snapshotResult] = await Promise.all([
-    readOnpeSummaryMetadata.triggerAndWait(),
-    snapshotOverride
-      ? Promise.resolve({ ok: true as const, output: { snapshot: snapshotOverride } })
-      : readOnpeSnapshot.triggerAndWait(),
+    fetch(LATEST_SUMMARY_URL, {
+      cache: "no-store",
+    }).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch ONPE summary blob: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      return onpeSummaryMetadataSchema.parse(await response.json());
+    }),
+    readSnapshotPromise,
   ]);
 
-  if (!summaryResult.ok) {
-    throw summaryResult.error;
-  }
-
-  if (!snapshotResult.ok) {
-    throw snapshotResult.error;
-  }
-
-  if (!summaryResult.output.summary) {
-    throw new Error("No ONPE summary metadata found");
-  }
-
-  if (!snapshotResult.output.snapshot) {
-    throw new Error("No ONPE snapshot found");
-  }
-
-  const parsed = parseSnapshotEntries(snapshotResult.output.snapshot);
+  const parsed = parseSnapshotEntries(snapshotResult);
   const renderEntries = await Promise.all(
     parsed.entries.map((entry, index) => buildRenderEntry(entry, index)),
   );
 
   return {
-    summary: summaryResult.output.summary,
+    summary: summaryResult,
     renderEntries,
   };
 }
