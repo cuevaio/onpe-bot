@@ -139,7 +139,7 @@ async function sendLatestOnpeChangeAlert(params: {
 
 export const monitorOnpeElection = schedules.task({
   id: "monitor-onpe-election",
-  cron: "*/5 * * * *",
+  cron: "*/10 * * * *",
   maxDuration: 300,
   queue: {
     concurrencyLimit: 1,
