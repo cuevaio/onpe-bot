@@ -60,6 +60,25 @@ type KapsoMessageReceivedPayload = {
   };
 };
 
+type KapsoBatchPayload = {
+  batch?: boolean;
+  data?: KapsoMessageReceivedPayload[];
+  batch_info?: {
+    size?: number;
+    conversation_id?: string;
+    window_ms?: number;
+  };
+};
+
+type InboundWebhookEntry = {
+  payload: KapsoMessageReceivedPayload;
+  index: number;
+  phoneNumber: string;
+  providerMessageId: string | null;
+  conversationId: string | null;
+  messageText: string;
+};
+
 function verifySignature(rawBody: string, signature: string, secret: string) {
 	const expectedSignature = createHmac("sha256", secret)
 		.update(rawBody)
@@ -114,6 +133,14 @@ async function registerSender(params: {
 		duplicate: !row?.deliveryInserted,
 		senderInserted: Boolean(row?.senderInserted),
 	};
+}
+
+async function registerDelivery(params: {
+	idempotencyKey: string;
+	eventType: string;
+	phoneNumber: string;
+}) {
+	return registerSender(params);
 }
 
 function readMessageText(message: Record<string, unknown>) {
@@ -232,6 +259,73 @@ function summarizePayloadMessage(payload: KapsoMessageReceivedPayload) {
     videoCaption: payload.message.video?.caption ?? null,
     documentCaption: payload.message.document?.caption ?? null,
   };
+}
+
+function unwrapWebhookEntries(payload: KapsoBatchPayload | KapsoMessageReceivedPayload) {
+	const batchData = (payload as KapsoBatchPayload).data;
+
+	if (Array.isArray(batchData)) {
+		return batchData.map((entry, index) => ({
+			payload: entry,
+			index,
+		}));
+	}
+
+	return [{ payload: payload as KapsoMessageReceivedPayload, index: 0 }];
+}
+
+function buildInboundWebhookEntry(
+	entryPayload: KapsoMessageReceivedPayload,
+	index: number,
+	normalizedMessages: NormalizedKapsoMessage[],
+) {
+	const phoneNumber = entryPayload.conversation?.phone_number?.trim();
+
+	if (!phoneNumber) {
+		return null;
+	}
+
+	const fallbackCurrentMessage = getCurrentInboundMessage(
+		phoneNumber,
+		normalizedMessages,
+	);
+	const messageText =
+		getPayloadMessageText(entryPayload) ||
+		(fallbackCurrentMessage ? readMessageText(fallbackCurrentMessage) : "");
+	const providerMessageId =
+		getPayloadProviderMessageId(entryPayload) || getProviderMessageId(fallbackCurrentMessage);
+	const conversationId =
+		getPayloadConversationId(entryPayload) ||
+		fallbackCurrentMessage?.kapso?.whatsappConversationId ||
+		null;
+
+	return {
+		payload: entryPayload,
+		index,
+		phoneNumber,
+		providerMessageId,
+		conversationId,
+		messageText,
+	} satisfies InboundWebhookEntry;
+}
+
+function buildDeliveryKey(idempotencyKey: string, entry: InboundWebhookEntry) {
+	return entry.providerMessageId
+		? `${RECEIVED_EVENT}:${entry.providerMessageId}`
+		: `${idempotencyKey}:${entry.index}`;
+}
+
+function mergeInboundTexts(entries: InboundWebhookEntry[]) {
+	return entries
+		.map((entry) => entry.messageText.trim())
+		.filter((text) => text.length > 0)
+		.join("\n");
+}
+
+function selectResponseEntry(entries: InboundWebhookEntry[]) {
+	const entriesWithText = entries.filter((entry) => entry.messageText.trim().length > 0);
+
+	return entriesWithText.at(-1) ?? entries.at(-1) ?? null;
 }
 
 function getCurrentInboundMessage(
@@ -359,7 +453,7 @@ export async function POST(request: Request) {
 		return new Response("Ignored", { status: 200 });
 	}
 
-	let payload: KapsoMessageReceivedPayload;
+	let payload: KapsoBatchPayload | KapsoMessageReceivedPayload;
 
 	try {
 		payload = JSON.parse(rawBody) as KapsoMessageReceivedPayload;
@@ -367,108 +461,127 @@ export async function POST(request: Request) {
 		return new Response("Invalid JSON payload", { status: 400 });
 	}
 
-	const phoneNumber = payload.conversation?.phone_number?.trim();
-
-	if (!phoneNumber) {
-		return new Response("Missing conversation.phone_number", { status: 400 });
-	}
-
 	try {
-		const registration = await registerSender({
-			idempotencyKey,
-			eventType,
-			phoneNumber,
-		});
 		const normalized = normalizeWebhook(JSON.parse(rawBody));
 		const normalizedMessages = normalized.messages as NormalizedKapsoMessage[];
-		const fallbackCurrentMessage = getCurrentInboundMessage(
-			phoneNumber,
-			normalizedMessages,
-		);
-		const currentMessageText =
-			getPayloadMessageText(payload) ||
-			(fallbackCurrentMessage ? readMessageText(fallbackCurrentMessage) : "");
-		const providerMessageId =
-			getPayloadProviderMessageId(payload) || getProviderMessageId(fallbackCurrentMessage);
-		const conversationId =
-			getPayloadConversationId(payload) ||
-			fallbackCurrentMessage?.kapso?.whatsappConversationId ||
-			null;
+		const envelopeEntries = unwrapWebhookEntries(payload);
+		const inboundEntries = envelopeEntries
+			.map(({ payload: entryPayload, index }) =>
+				buildInboundWebhookEntry(entryPayload, index, normalizedMessages),
+			)
+			.filter((entry): entry is InboundWebhookEntry => entry !== null);
+
+		if (inboundEntries.length === 0) {
+			return new Response("Missing conversation.phone_number", { status: 400 });
+		}
+
+		const processedEntries: Array<
+			InboundWebhookEntry & { duplicate: boolean; senderInserted: boolean }
+		> = [];
+
+		for (const entry of inboundEntries) {
+			const registration = await registerDelivery({
+				idempotencyKey: buildDeliveryKey(idempotencyKey, entry),
+				eventType,
+				phoneNumber: entry.phoneNumber,
+			});
+
+			processedEntries.push({
+				...entry,
+				duplicate: registration.duplicate,
+				senderInserted: registration.senderInserted,
+			});
+		}
+
+		const uniqueEntries = processedEntries.filter((entry) => !entry.duplicate);
+		const selectedEntry = selectResponseEntry(uniqueEntries);
+		const mergedInboundText = mergeInboundTexts(uniqueEntries);
 
 		logWebhookEvent("received", {
 			idempotencyKey,
 			eventType,
-			phoneNumber,
-			providerMessageId,
-			duplicate: registration.duplicate,
-			senderInserted: registration.senderInserted,
-			currentMessageText,
-			payloadMessageSummary: summarizePayloadMessage(payload),
-			currentMessageSummary: summarizeNormalizedMessage(fallbackCurrentMessage),
+			batch: Array.isArray((payload as KapsoBatchPayload).data),
+			batchSize: (payload as KapsoBatchPayload).batch_info?.size ?? uniqueEntries.length,
+			batchConversationId:
+				(payload as KapsoBatchPayload).batch_info?.conversation_id ?? null,
+			entries: processedEntries.map((entry) => ({
+				index: entry.index,
+				phoneNumber: entry.phoneNumber,
+				providerMessageId: entry.providerMessageId,
+				duplicate: entry.duplicate,
+				senderInserted: entry.senderInserted,
+				messageText: entry.messageText,
+				payloadMessageSummary: summarizePayloadMessage(entry.payload),
+			})),
+			mergedInboundText,
+			selectedEntryIndex: selectedEntry?.index ?? null,
 		});
 
-		if (registration.senderInserted) {
-			await sendWelcome(phoneNumber);
-			logWebhookEvent("welcome_sent", {
-				idempotencyKey,
-				phoneNumber,
-				providerMessageId,
-			});
-		}
-
-		if (registration.duplicate) {
+		if (uniqueEntries.length === 0) {
 			logWebhookEvent("skipped_duplicate", {
 				idempotencyKey,
-				phoneNumber,
-				providerMessageId,
+				entries: processedEntries.map((entry) => ({
+					index: entry.index,
+					providerMessageId: entry.providerMessageId,
+				})),
 			});
 			return new Response("OK", { status: 200 });
 		}
 
-		const senderState = await getSenderState(phoneNumber);
+		if (!selectedEntry) {
+			return new Response("OK", { status: 200 });
+		}
+
+		const selectedProcessedEntry = processedEntries.find(
+			(entry) => entry.index === selectedEntry.index,
+		);
+
+		if (!selectedProcessedEntry) {
+			throw new Error(`Selected entry metadata not found for index ${selectedEntry.index}`);
+		}
+
+		const senderState = await getSenderState(selectedProcessedEntry.phoneNumber);
 
 		if (!senderState) {
-			throw new Error(`Sender state not found for ${phoneNumber}`);
+			throw new Error(`Sender state not found for ${selectedProcessedEntry.phoneNumber}`);
 		}
 
-		const recentMessages: ConversationMessage[] = conversationId
-			? await getConversationHistory(conversationId)
-			: currentMessageText
-				? [{ direction: "inbound" as const, text: currentMessageText }]
+		const recentMessages: ConversationMessage[] = selectedProcessedEntry.conversationId
+			? await getConversationHistory(selectedProcessedEntry.conversationId)
+			: mergedInboundText
+				? [{ direction: "inbound" as const, text: mergedInboundText }]
 				: [];
 
-		if (!currentMessageText) {
+		if (!mergedInboundText) {
 			logWebhookEvent("skipped_empty_message", {
 				idempotencyKey,
-				phoneNumber,
-				providerMessageId,
-				payloadMessageSummary: summarizePayloadMessage(payload),
-				currentMessageSummary: summarizeNormalizedMessage(fallbackCurrentMessage),
+				selectedEntryIndex: selectedEntry.index,
 			});
 			return new Response("OK", { status: 200 });
 		}
 
-		const deterministicAction = parseDeterministicCommand(currentMessageText);
+		const deterministicAction = parseDeterministicCommand(mergedInboundText);
 		let finalAction = deterministicAction;
 		let llmInvoked = false;
 
 		if (deterministicAction.type === "none") {
 			llmInvoked = true;
 			finalAction = await handleInboundMessageWithAgent({
-				phoneNumber,
+				phoneNumber: selectedProcessedEntry.phoneNumber,
 				senderState,
-				currentMessage: currentMessageText,
+				currentMessage: mergedInboundText,
 				recentMessages,
 			});
 		}
 
 		logWebhookEvent("action_selected", {
 			idempotencyKey,
-			phoneNumber,
-			providerMessageId,
+			phoneNumber: selectedProcessedEntry.phoneNumber,
+			providerMessageId: selectedProcessedEntry.providerMessageId,
 			deterministicAction,
 			llmInvoked,
 			finalAction,
+			selectedEntryIndex: selectedProcessedEntry.index,
 		});
 
 		const executableAction = toExecutableAction(
@@ -477,31 +590,42 @@ export async function POST(request: Request) {
 		);
 
 		if (executableAction.type === "none") {
+			if (selectedProcessedEntry.senderInserted) {
+				await sendWelcome(selectedProcessedEntry.phoneNumber);
+				logWebhookEvent("welcome_sent", {
+					idempotencyKey,
+					phoneNumber: selectedProcessedEntry.phoneNumber,
+					providerMessageId: selectedProcessedEntry.providerMessageId,
+					selectedEntryIndex: selectedProcessedEntry.index,
+				});
+				return new Response("OK", { status: 200 });
+			}
+
 			logWebhookEvent("no_action_selected", {
 				idempotencyKey,
-				phoneNumber,
-				providerMessageId,
-				currentMessageText,
+				phoneNumber: selectedProcessedEntry.phoneNumber,
+				providerMessageId: selectedProcessedEntry.providerMessageId,
+				mergedInboundText,
 			});
 			return new Response("OK", { status: 200 });
 		}
 
 		await executeWhatsappAction({
-			phoneNumber,
+			phoneNumber: selectedProcessedEntry.phoneNumber,
 			action: executableAction,
 		});
 
 		logWebhookEvent("action_executed", {
 			idempotencyKey,
-			phoneNumber,
-			providerMessageId,
+			phoneNumber: selectedProcessedEntry.phoneNumber,
+			providerMessageId: selectedProcessedEntry.providerMessageId,
 			executedAction: executableAction,
+			selectedEntryIndex: selectedProcessedEntry.index,
 		});
 	} catch (error) {
 		console.error("Failed to process Kapso sender", {
 			eventType,
 			idempotencyKey,
-			phoneNumber,
 			error,
 		});
 

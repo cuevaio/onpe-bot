@@ -2,16 +2,8 @@ import { openai } from "@ai-sdk/openai";
 import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 
-import type { OnpeTopCount } from "@/lib/cache";
 import type { DeterministicCommandAction } from "@/lib/whatsapp-command-router";
 import type { SenderState } from "@/lib/whatsapp-senders";
-import {
-	pauseUpdates,
-	resumeUpdates,
-	sendHelp,
-	sendLatestChart,
-	setChartPreference,
-} from "@/lib/whatsapp-tools";
 
 type ConversationMessage = {
 	direction: "inbound" | "outbound";
@@ -55,36 +47,21 @@ export async function handleInboundMessageWithAgent(params: {
 					"Use when the user wants to stop receiving automatic updates. Examples: 'pausa', 'stop', 'no quiero updates', 'deja de enviar'.",
 				inputSchema: z.object({}),
 				strict: true,
-				execute: async () => {
-					await pauseUpdates(params.phoneNumber);
-					return { action: "paused" };
-				},
+				execute: async () => ({ action: "paused" }),
 			}),
 			resume_updates: tool({
 				description:
 					"Use when the user wants to receive automatic updates again. Examples: 'reactiva', 'reanuda', 'resume', 'quiero updates otra vez'.",
 				inputSchema: z.object({}),
 				strict: true,
-				execute: async () => {
-					await resumeUpdates(
-						params.phoneNumber,
-						params.senderState.preferredTopCount,
-					);
-					return { action: "resumed" };
-				},
+				execute: async () => ({ action: "resumed" }),
 			}),
 			send_latest_chart: tool({
 				description:
 					"Use when the user asks for the current image/chart without changing preference. Examples: 'ultimo chart', 'latest chart', 'manda el chart', 'envia la imagen'.",
 				inputSchema: z.object({}),
 				strict: true,
-				execute: async () => {
-					await sendLatestChart(
-						params.phoneNumber,
-						params.senderState.preferredTopCount,
-					);
-					return { action: "sent_latest_chart" };
-				},
+				execute: async () => ({ action: "sent_latest_chart" }),
 			}),
 			set_chart_preference: tool({
 				description:
@@ -93,20 +70,14 @@ export async function handleInboundMessageWithAgent(params: {
 					topCount: z.union([z.literal(3), z.literal(5)]),
 				}),
 				strict: true,
-				execute: async ({ topCount }) => {
-					await setChartPreference(params.phoneNumber, topCount as OnpeTopCount);
-					return { action: "set_chart_preference", topCount };
-				},
+				execute: async ({ topCount }) => ({ action: "set_chart_preference", topCount }),
 			}),
 			send_help: tool({
 				description:
 					"Use only when the user explicitly asks what the bot can do or asks for help/instructions. Examples: 'que puedes hacer?', 'ayuda', 'help', 'como funciona?', 'que comandos hay?'. Do not use for top 3, top 5, pause/resume, or latest chart requests.",
 				inputSchema: z.object({}),
 				strict: true,
-				execute: async () => {
-					await sendHelp(params.phoneNumber);
-					return { action: "sent_help" };
-				},
+				execute: async () => ({ action: "sent_help" }),
 			}),
 		},
 	});
