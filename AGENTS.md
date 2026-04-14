@@ -8,20 +8,20 @@ This repo uses `next@16.2.3` and `react@19.2.4`. Read the relevant guide in `nod
 
 ## Commands
 
-- Install: `npm install`
-- Dev server: `npm run dev`
-- Lint: `npm run lint`
+- Install: `bun install`
+- Dev server: `bun run dev`
+- Lint: `bun run lint`
 - Typecheck: `npx tsc --noEmit`
-- Production build: `npm run build`
-- Drizzle generate: `npm run db:generate`
-- Drizzle migrate: `npm run db:migrate`
-- Drizzle Studio: `npm run db:studio`
+- Production build: `bun run build`
+- Drizzle generate: `bun run db:generate`
+- Drizzle migrate: `bun run db:migrate`
+- Drizzle Studio: `bun run db:studio`
 - There is no test script and no test files in the repo today.
 
 ## Verification
 
-- Default focused verification is `npm run lint` then `npx tsc --noEmit`.
-- Run `npm run build` only when changes touch routing, env usage, or Next.js integration points.
+- Default focused verification is `bun run lint` then `npx tsc --noEmit`.
+- Run `bun run build` only when changes touch routing, env usage, or Next.js integration points.
 
 ## Architecture
 
