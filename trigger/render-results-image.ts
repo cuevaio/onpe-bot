@@ -35,7 +35,10 @@ const GRID_COLOR = "#d3d3d3";
 const TEXT_COLOR = "#262626";
 const TITLE = "Resultados presidenciales";
 const SUBTITLE = "Votos validos";
-const FONT_PATH = path.join(process.cwd(), "node_modules/sharp/fonts/DejaVuSans.ttf");
+const FONT_PATH = path.join(
+	process.cwd(),
+	"assets/fonts/Geist-Regular.ttf",
+);
 const ONPE_ASSET_HEADERS = {
 	accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
 	referer: ONPE_REFERER,
@@ -113,7 +116,15 @@ async function getEmbeddedFontCss() {
 		return embeddedFontCss;
 	}
 
-	const fontBuffer = await readFile(FONT_PATH);
+	let fontBuffer: Buffer;
+
+	try {
+		fontBuffer = await readFile(FONT_PATH);
+	} catch (error) {
+		throw new Error(
+			`Unable to read bundled chart font at ${FONT_PATH}: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 	const fontBase64 = fontBuffer.toString("base64");
 
 	embeddedFontCss = `
