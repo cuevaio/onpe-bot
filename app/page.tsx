@@ -10,34 +10,33 @@ const copy = {
     meta: {
       title: "ONPE Bot | Resultados por WhatsApp",
       description:
-        "Recibe el ultimo grafico presidencial de ONPE y nuevas actualizaciones oficiales por WhatsApp.",
+        "Recibe por WhatsApp la ultima imagen oficial de las elecciones en Peru, basada en los conteos de votos de ONPE.",
     },
     brand: "ONPE Bot",
     hero: {
-      eyebrow: "Resultados presidenciales por WhatsApp.",
-      title: "Recibe el ultimo grafico de ONPE en tu chat.",
+      eyebrow: "Ultimas elecciones en Peru por WhatsApp.",
+      title: "Recibe en tu chat la ultima imagen oficial de ONPE.",
       description:
-        "Escribe al numero y el bot responde con la imagen actual. Cuando ONPE cambia, llega otra automaticamente.",
+        "ONPE es la entidad que contabiliza los votos en Peru. Este bot toma su ultimo conteo publicado y te envia la imagen actualizada por WhatsApp.",
       ctaLabel: "WhatsApp",
-      ctaHint: "Escribe una vez. Quedas registrado para las proximas actualizaciones oficiales.",
+      ctaHint: "Escribe una vez. Quedas registrado para recibir nuevas actualizaciones oficiales cuando ONPE publique cambios.",
     },
     metric: {
       label: "Usuarios",
-      caption: "registrados ya usan el bot para seguir cambios oficiales de ONPE.",
-      fallback: "Actualizaciones oficiales, enviadas automaticamente.",
+      caption: "registrados ya siguen por WhatsApp el ultimo conteo oficial publicado por ONPE.",
+      fallback: "El ultimo conteo oficial de ONPE, entregado automaticamente por WhatsApp.",
     },
     steps: {
       label: "Como funciona",
       items: [
         "Escribe al numero.",
-        "Recibe la imagen actual.",
-        "Espera nuevas alertas cuando ONPE cambie.",
+        "Recibe la ultima imagen oficial disponible.",
+        "Espera nuevas alertas cuando ONPE actualice el conteo.",
       ],
     },
     footer: {
-      credit: "Hecho por Anthony",
       note: "Fuente: ONPE.",
-      detail: "Un bot simple para seguir resultados sin refrescar paginas todo el dia.",
+      detail: "Un bot para seguir las ultimas elecciones en Peru sin estar revisando la web a cada rato.",
       website: "Website",
       sourceCode: "Codigo fuente",
     },
@@ -47,34 +46,33 @@ const copy = {
     meta: {
       title: "ONPE Bot | Results over WhatsApp",
       description:
-        "Get the latest ONPE presidential chart and official result updates through WhatsApp.",
+        "Get the latest official Peru election image on WhatsApp, based on ONPE vote counts.",
     },
     brand: "ONPE Bot",
     hero: {
-      eyebrow: "Presidential results over WhatsApp.",
-      title: "Get the latest ONPE chart in your chat.",
+      eyebrow: "Latest Peru election updates over WhatsApp.",
+      title: "Get the latest official ONPE image in your chat.",
       description:
-        "Message the number and the bot replies with the current image. When ONPE changes, another one arrives automatically.",
+        "ONPE is the public institution that counts votes in Peru. This bot takes its latest published count and sends you the current image over WhatsApp.",
       ctaLabel: "WhatsApp",
-      ctaHint: "Send one message. You stay registered for the next official updates.",
+      ctaHint: "Send one message. You stay registered for future official updates whenever ONPE publishes a new count.",
     },
     metric: {
       label: "Users",
-      caption: "registered people already use the bot to follow official ONPE changes.",
-      fallback: "Official updates, delivered automatically.",
+      caption: "registered users already follow the latest official ONPE count through WhatsApp.",
+      fallback: "The latest official ONPE count, delivered automatically through WhatsApp.",
     },
     steps: {
       label: "How it works",
       items: [
         "Message the number.",
-        "Get the current chart.",
-        "Wait for a new alert when ONPE changes.",
+        "Get the latest official image.",
+        "Wait for a new alert when ONPE updates the count.",
       ],
     },
     footer: {
-      credit: "Made by Anthony",
       note: "Source: ONPE.",
-      detail: "A simple bot for following results without refreshing pages all day.",
+      detail: "A bot for following the latest Peru election count without refreshing the web all day.",
       website: "Website",
       sourceCode: "Source Code",
     },
@@ -250,14 +248,14 @@ export default async function Home({ searchParams }: HomePageProps) {
           <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-4 px-5 py-6 text-[13px] text-white/42 md:flex-row md:items-center md:justify-between md:px-6">
             <div className="max-w-[24rem] space-y-1">
               <p>
-                {content.footer.credit}{" "}
+                A project by Crafter Station Community{" "}
                 <a
-                  href="https://www.cueva.io"
+                  href="https://crafterstation.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="transition-colors hover:text-white"
                 >
-                  (www.cueva.io)
+                  (crafterstation.com)
                 </a>
               </p>
               <p>

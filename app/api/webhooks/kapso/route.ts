@@ -117,7 +117,9 @@ export async function POST(request: Request) {
 			const imageUrl = await getLatestOnpeImageUrl();
 
 			if (!imageUrl) {
-				throw new Error("No cached ONPE image URL available for new user welcome message");
+				throw new Error(
+					"No cached ONPE image URL available for new user welcome message",
+				);
 			}
 
 			await kapsoClient.messages.sendImage({
@@ -125,8 +127,7 @@ export async function POST(request: Request) {
 				to: phoneNumber,
 				image: {
 					link: imageUrl,
-					caption: `Bienvenido. Estos son los ultimos resultados presidenciales de ONPE.
-            Te enviaremos actualizaciones automáticamente.`,
+					caption: `Bienvenidx. Estos son los ultimos resultados presidenciales de ONPE. Te enviaremos actualizaciones automáticamente.`,
 				},
 			});
 		}
