@@ -72,6 +72,7 @@ export async function setChartPreference(
   phoneNumber: string,
   topCount: OnpeTopCount,
 ) {
+  await setSenderActive(phoneNumber, true);
   await setSenderTopCount(phoneNumber, topCount);
   await sendLatestChartToRecipient({
     phoneNumber,
