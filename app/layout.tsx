@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -29,11 +30,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="es"
-      className={`${spaceGrotesk.variable} ${geistMono.variable} h-full`}
-    >
-      <body className="min-h-full flex flex-col font-sans antialiased">{children}</body>
-    </html>
+      <html
+        lang="es"
+        className={`${spaceGrotesk.variable} ${geistMono.variable} h-full`}
+      >
+      <body className="min-h-full flex flex-col font-sans antialiased">
+        {children}
+        <Analytics />
+      </body>
+      </html>
   );
 }
