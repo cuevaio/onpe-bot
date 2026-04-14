@@ -38,6 +38,8 @@ const copy = {
       credit: "Hecho por Anthony",
       note: "Fuente: ONPE.",
       detail: "Un bot simple para seguir resultados sin refrescar paginas todo el dia.",
+      website: "Website",
+      sourceCode: "Codigo fuente",
     },
     whatsappPrefill: "Hola, quiero recibir actualizaciones de ONPE.",
   },
@@ -73,6 +75,8 @@ const copy = {
       credit: "Made by Anthony",
       note: "Source: ONPE.",
       detail: "A simple bot for following results without refreshing pages all day.",
+      website: "Website",
+      sourceCode: "Source Code",
     },
     whatsappPrefill: "Hi, I want ONPE updates.",
   },
@@ -244,7 +248,7 @@ export default async function Home({ searchParams }: HomePageProps) {
 
         <footer className="relative z-10 w-full">
           <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-4 px-5 py-6 text-[13px] text-white/42 md:flex-row md:items-center md:justify-between md:px-6">
-            <div className="space-y-1">
+            <div className="max-w-[24rem] space-y-1">
               <p>
                 {content.footer.credit}{" "}
                 <a
@@ -261,7 +265,23 @@ export default async function Home({ searchParams }: HomePageProps) {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:justify-end">
+              <a
+                href="https://www.cueva.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-white"
+              >
+                {content.footer.website}
+              </a>
+              <a
+                href="https://github.com/cuevaio/onpe-bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-white"
+              >
+                {content.footer.sourceCode}
+              </a>
               <a
                 href="https://github.com/cuevaio"
                 target="_blank"
@@ -293,22 +313,6 @@ export default async function Home({ searchParams }: HomePageProps) {
                 className="transition-colors hover:text-white"
               >
                 Instagram
-              </a>
-              <a
-                href="https://www.cueva.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-white"
-              >
-                Website
-              </a>
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-white"
-              >
-                {PHONE_NUMBER_DISPLAY}
               </a>
             </div>
           </div>
