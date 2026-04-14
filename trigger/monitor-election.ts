@@ -6,6 +6,7 @@ import {
   LATEST_SUMMARY_PATH,
   type OnpeSummaryMetadata,
 } from "@/lib/onpe";
+import { ensureLatestOnpeImageUrl, hasLatestOnpeImageUrl } from "@/lib/onpe-images";
 import { parseSnapshotEntries } from "@/lib/render-results";
 import { fetchOnpeSnapshot } from "@/trigger/fetch-snapshot";
 import { loadOnpeSnapshots } from "@/trigger/load-snapshots";
@@ -61,7 +62,11 @@ async function renderLatestOnpeResultsImage(
   summary: OnpeSummaryMetadata,
   snapshot: string,
 ) {
-  const renderResults = [];
+  const renderResults: Array<{
+    topCount: 3 | 5;
+    updatedAt: number;
+    url: string;
+  }> = [];
 
   for (const topCount of [3, 5] as const) {
     const renderResult = await renderOnpeResultsImage.triggerAndWait({
@@ -82,9 +87,47 @@ async function renderLatestOnpeResultsImage(
   return renderResults;
 }
 
-async function sendLatestOnpeChangeAlert(updatedAt: number) {
+async function healLatestOnpeImageCache(summary: OnpeSummaryMetadata) {
+  for (const topCount of [3, 5] as const) {
+    const isFresh = await hasLatestOnpeImageUrl(topCount, summary.fechaActualizacion);
+
+    if (isFresh) {
+      continue;
+    }
+
+    await ensureLatestOnpeImageUrl(topCount, summary.fechaActualizacion);
+  }
+}
+
+function getImageUrlsByTopCount(
+  imageResults: Array<{
+    topCount: 3 | 5;
+    url: string;
+  }>,
+) {
+  const top3Url = imageResults.find((result) => result.topCount === 3)?.url;
+  const top5Url = imageResults.find((result) => result.topCount === 5)?.url;
+
+  if (!top3Url || !top5Url) {
+    throw new Error("Missing freshly rendered ONPE image URL");
+  }
+
+  return {
+    3: top3Url,
+    5: top5Url,
+  };
+}
+
+async function sendLatestOnpeChangeAlert(params: {
+  updatedAt: number;
+  imageUrlsByTopCount: {
+    3: string;
+    5: string;
+  };
+}) {
   const alertResult = await sendOnpeChangeAlert.triggerAndWait({
-    updatedAt,
+    updatedAt: params.updatedAt,
+    imageUrlsByTopCount: params.imageUrlsByTopCount,
   });
 
   if (!alertResult.ok) {
@@ -143,7 +186,10 @@ export const monitorOnpeElection = schedules.task({
         latestSummary,
         storeResult.snapshot,
       );
-      await sendLatestOnpeChangeAlert(imageResult[0].updatedAt);
+      await sendLatestOnpeChangeAlert({
+        updatedAt: imageResult[0].updatedAt,
+        imageUrlsByTopCount: getImageUrlsByTopCount(imageResult),
+      });
 
       return {
         changed: false,
@@ -153,6 +199,8 @@ export const monitorOnpeElection = schedules.task({
     }
 
     if (previousSummary.fechaActualizacion === latestSummary.fechaActualizacion) {
+      await healLatestOnpeImageCache(latestSummary);
+
       logger.info("ONPE snapshot unchanged", {
         fechaActualizacion: latestSummary.fechaActualizacion,
         actasContabilizadas: latestSummary.actasContabilizadas,
@@ -202,7 +250,10 @@ export const monitorOnpeElection = schedules.task({
     });
 
     const updatedAt = imageResult[0].updatedAt;
-    await sendLatestOnpeChangeAlert(updatedAt);
+    await sendLatestOnpeChangeAlert({
+      updatedAt,
+      imageUrlsByTopCount: getImageUrlsByTopCount(imageResult),
+    });
 
     return {
       changed: true,

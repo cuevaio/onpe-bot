@@ -5,10 +5,40 @@ import { kapsoClient } from "@/lib/kapso";
 import { renderOnpeResultsImage } from "@/trigger/render-results-image";
 import { env } from "@/env";
 
-export async function ensureLatestOnpeImageUrl(topCount: OnpeTopCount) {
+const ONPE_IMAGE_PATHNAME_PATTERN = /\/chart-top-(3|5)-(\d+)\.png$/;
+
+export function readOnpeImageUpdatedAtFromUrl(url: string) {
+  const pathname = new URL(url).pathname;
+  const match = pathname.match(ONPE_IMAGE_PATHNAME_PATTERN);
+
+  if (!match) {
+    return null;
+  }
+
+  return Number.parseInt(match[2], 10);
+}
+
+export async function hasLatestOnpeImageUrl(topCount: OnpeTopCount, expectedUpdatedAt: number) {
   const cachedUrl = await getLatestOnpeImageUrl(topCount);
 
-  if (cachedUrl) {
+  if (!cachedUrl) {
+    return false;
+  }
+
+  return readOnpeImageUpdatedAtFromUrl(cachedUrl) === expectedUpdatedAt;
+}
+
+export async function ensureLatestOnpeImageUrl(
+  topCount: OnpeTopCount,
+  expectedUpdatedAt?: number,
+) {
+  const cachedUrl = await getLatestOnpeImageUrl(topCount);
+
+  if (
+    cachedUrl &&
+    (expectedUpdatedAt === undefined ||
+      readOnpeImageUpdatedAtFromUrl(cachedUrl) === expectedUpdatedAt)
+  ) {
     return cachedUrl;
   }
 

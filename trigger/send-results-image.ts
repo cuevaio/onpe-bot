@@ -12,6 +12,12 @@ const onpeSendResultsImagePayloadSchema = z.object({
   caption: z.string().min(1),
   imageUrl: z.string().url().optional(),
   topCount: z.union([z.literal(3), z.literal(5)]).optional(),
+  imageUrlsByTopCount: z
+    .object({
+      3: z.string().url().optional(),
+      5: z.string().url().optional(),
+    })
+    .optional(),
 });
 
 async function sendImageBatch(params: {
@@ -49,7 +55,7 @@ export const sendOnpeResultsImage = schemaTask({
   id: "send-onpe-results-image",
   schema: onpeSendResultsImagePayloadSchema,
   maxDuration: 300,
-  run: async ({ recipients, caption, imageUrl, topCount }) => {
+  run: async ({ recipients, caption, imageUrl, topCount, imageUrlsByTopCount }) => {
     const failedRecipients: string[] = [];
 
     if (recipients) {
@@ -100,7 +106,10 @@ export const sendOnpeResultsImage = schemaTask({
         continue;
       }
 
-      const resolvedImageUrl = imageUrl ?? (await ensureLatestOnpeImageUrl(currentTopCount));
+      const resolvedImageUrl =
+        imageUrl ??
+        imageUrlsByTopCount?.[currentTopCount] ??
+        (await ensureLatestOnpeImageUrl(currentTopCount));
       sentUrls.set(currentTopCount, resolvedImageUrl);
       failedRecipients.push(
         ...(await sendImageBatch({

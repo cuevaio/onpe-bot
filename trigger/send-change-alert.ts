@@ -8,13 +8,18 @@ export const sendOnpeChangeAlert = schemaTask({
   id: "send-onpe-change-alert",
   schema: z.object({
     updatedAt: z.number().int().nonnegative(),
+    imageUrlsByTopCount: z.object({
+      3: z.string().url(),
+      5: z.string().url(),
+    }),
   }),
   maxDuration: 300,
-  run: async ({ updatedAt }) => {
+  run: async ({ updatedAt, imageUrlsByTopCount }) => {
     const formattedUpdatedAt = formatOnpeUpdateTimestamp(updatedAt);
 
     const sendResult = await sendOnpeResultsImage.triggerAndWait({
       caption: `Actualizacion ONPE: ${formattedUpdatedAt}`,
+      imageUrlsByTopCount,
     });
 
     if (!sendResult.ok) {
