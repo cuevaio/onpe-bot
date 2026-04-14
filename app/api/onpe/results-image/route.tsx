@@ -92,32 +92,33 @@ async function readImageInputs(snapshotOverride?: string) {
 }
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const payload = onpeResultsImagePayloadSchema.parse({
-    snapshot: url.searchParams.get("snapshot") ?? undefined,
-    title: url.searchParams.get("title") ?? undefined,
-    subtitle: url.searchParams.get("subtitle") ?? undefined,
-  });
+  try {
+    const url = new URL(request.url);
+    const payload = onpeResultsImagePayloadSchema.parse({
+      snapshot: url.searchParams.get("snapshot") ?? undefined,
+      title: url.searchParams.get("title") ?? undefined,
+      subtitle: url.searchParams.get("subtitle") ?? undefined,
+    });
 
-  const [{ summary, renderEntries }, font] = await Promise.all([
-    readImageInputs(payload.snapshot),
-    getFontData(),
-  ]);
-  const layout = buildChartLayout(payload, renderEntries, summary);
+    const [{ summary, renderEntries }, font] = await Promise.all([
+      readImageInputs(payload.snapshot),
+      getFontData(),
+    ]);
+    const layout = buildChartLayout(payload, renderEntries, summary);
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: `${IMAGE_WIDTH}px`,
-          height: `${IMAGE_HEIGHT}px`,
-          display: "flex",
-          position: "relative",
-          background: BACKGROUND_COLOR,
-          fontFamily: "OnpeChartFont",
-          color: TEXT_COLOR,
-        }}
-      >
+    return new ImageResponse(
+      (
+        <div
+          style={{
+            width: `${IMAGE_WIDTH}px`,
+            height: `${IMAGE_HEIGHT}px`,
+            display: "flex",
+            position: "relative",
+            background: BACKGROUND_COLOR,
+            fontFamily: "OnpeChartFont",
+            color: TEXT_COLOR,
+          }}
+        >
         <div
           style={{
             position: "absolute",
@@ -284,22 +285,32 @@ export async function GET(request: Request) {
             </div>
           </div>
         ))}
-      </div>
-    ),
-    {
-      width: IMAGE_WIDTH,
-      height: IMAGE_HEIGHT,
-      headers: {
-        "x-onpe-updated-at": String(summary.fechaActualizacion),
-      },
-      fonts: [
-        {
-          name: "OnpeChartFont",
-          data: font,
-          style: "normal",
-          weight: 400,
+        </div>
+      ),
+      {
+        width: IMAGE_WIDTH,
+        height: IMAGE_HEIGHT,
+        headers: {
+          "x-onpe-updated-at": String(summary.fechaActualizacion),
         },
-      ],
-    },
-  );
+        fonts: [
+          {
+            name: "OnpeChartFont",
+            data: font,
+            style: "normal",
+            weight: 400,
+          },
+        ],
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    return new Response(`ONPE image generation failed: ${message}`, {
+      status: 500,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+      },
+    });
+  }
 }

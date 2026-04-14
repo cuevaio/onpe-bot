@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ONPE_REFERER } from "@/lib/onpe";
+import { ONPE_REFERER, RESULTS_FONT_URL } from "@/lib/onpe";
 
 export const IMAGE_WIDTH = 1400;
 export const IMAGE_HEIGHT = 820;
@@ -21,8 +21,7 @@ export const GRID_COLOR = "#d3d3d3";
 export const TEXT_COLOR = "#262626";
 export const TITLE = "Resultados presidenciales";
 export const SUBTITLE = "Votos validos";
-export const FONT_URL =
-  "https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
+export const FONT_URL = RESULTS_FONT_URL;
 export const ONPE_ASSET_HEADERS = {
   accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
   referer: ONPE_REFERER,

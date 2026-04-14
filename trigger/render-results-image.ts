@@ -51,8 +51,9 @@ export const renderOnpeResultsImage = schemaTask({
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
       throw new Error(
-        `Failed to fetch rendered ONPE image: ${response.status} ${response.statusText}`,
+        `Failed to fetch rendered ONPE image: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody}` : ""}`,
       );
     }
 
