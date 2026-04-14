@@ -296,11 +296,14 @@ export async function GET(request: Request) {
             right: 40,
             bottom: 24,
             display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
             fontSize: 16,
             fontWeight: 500,
             color: "#606060",
           }}
         >
+          <div style={{ display: "flex", marginBottom: 4 }}>+1 (208) 361-7414</div>
           elecciones.cueva.io
         </div>
         </div>
