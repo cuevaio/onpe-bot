@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --background: #111111;
+  --foreground: oklch(0.985 0 0);
 }
 
 @theme inline {
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-space-grotesk);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    background: var(--background);
+    background-color: var(--background);
+    color-scheme: dark;
+    min-height: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    position: relative;
+    min-height: 100vh;
+    isolation: isolate;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  @supports (min-height: 100dvh) {
+    body {
+      min-height: 100dvh;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.page-shell {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #111111;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  color: white;
+}
+
+.page-shell-inner {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  min-height: calc(100svh - var(--safe-top) - var(--safe-bottom));
+  flex-direction: column;
+}
+
+@supports (min-height: 100dvh) {
+  .page-shell {
+    min-height: 100dvh;
+  }
+
+  .page-shell-inner {
+    min-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+  }
+}
+
+.minimal-hover {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.2rem 0.55rem;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.minimal-hover:hover {
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.minimal-hover.active {
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
