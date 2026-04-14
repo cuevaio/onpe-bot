@@ -6,6 +6,7 @@ import {
   LATEST_SUMMARY_PATH,
   type OnpeSummaryMetadata,
 } from "@/lib/onpe";
+import { parseSnapshotEntries } from "@/lib/render-results";
 import { fetchOnpeSnapshot } from "@/trigger/fetch-snapshot";
 import { loadOnpeSnapshots } from "@/trigger/load-snapshots";
 import { renderOnpeResultsImage } from "@/trigger/render-results-image";
@@ -18,6 +19,18 @@ async function storeLatestOnpeData(summary: OnpeSummaryMetadata) {
 
   if (!snapshotResult.ok) {
     throw snapshotResult.error;
+  }
+
+  const parsedSnapshot = parseSnapshotEntries(snapshotResult.output.snapshot);
+  const snapshotTotalValidVotes = parsedSnapshot.totalValidVotes;
+
+  if (snapshotTotalValidVotes !== summary.totalVotosValidos) {
+    return {
+      consistent: false,
+      latestBytes: snapshotResult.output.bytes,
+      snapshot: snapshotResult.output.snapshot,
+      snapshotTotalValidVotes,
+    };
   }
 
   const storeSnapshotResult = await storeOnpeSnapshot.triggerAndWait({
@@ -37,12 +50,23 @@ async function storeLatestOnpeData(summary: OnpeSummaryMetadata) {
   }
 
   return {
+    consistent: true,
     latestBytes: snapshotResult.output.bytes,
+    snapshot: snapshotResult.output.snapshot,
+    snapshotTotalValidVotes,
   };
 }
 
-async function renderLatestOnpeResultsImage() {
-  const renderResult = await renderOnpeResultsImage.triggerAndWait({});
+async function renderLatestOnpeResultsImage(
+  summary: OnpeSummaryMetadata,
+  snapshot: string,
+) {
+  const renderResult = await renderOnpeResultsImage.triggerAndWait({
+    snapshot,
+    updatedAt: summary.fechaActualizacion,
+    actasContabilizadas: summary.actasContabilizadas,
+    totalVotosValidos: summary.totalVotosValidos,
+  });
 
   if (!renderResult.ok) {
     throw renderResult.error;
@@ -88,17 +112,37 @@ export const monitorOnpeElection = schedules.task({
     const { latestSummary, previousSummary } = loadSnapshotsResult.output;
 
     if (previousSummary === null) {
-      await storeLatestOnpeData(latestSummary);
-      const imageResult = await renderLatestOnpeResultsImage();
-      await sendLatestOnpeChangeAlert(
-        latestSummary.fechaActualizacion,
-        imageResult.url,
+      const storeResult = await storeLatestOnpeData(latestSummary);
+
+      if (!storeResult.consistent) {
+        logger.warn("ONPE summary advanced before snapshot caught up", {
+          fechaActualizacion: latestSummary.fechaActualizacion,
+          actasContabilizadas: latestSummary.actasContabilizadas,
+          summaryTotalVotosValidos: latestSummary.totalVotosValidos,
+          snapshotTotalValidVotes: storeResult.snapshotTotalValidVotes,
+          nextBytes: storeResult.latestBytes,
+          snapshotPath: LATEST_SNAPSHOT_PATH,
+          summaryPath: LATEST_SUMMARY_PATH,
+        });
+
+        return {
+          changed: false,
+          initialized: false,
+          pending: true,
+          updatedAt: latestSummary.fechaActualizacion,
+        };
+      }
+
+      const imageResult = await renderLatestOnpeResultsImage(
+        latestSummary,
+        storeResult.snapshot,
       );
+      await sendLatestOnpeChangeAlert(imageResult.updatedAt, imageResult.url);
 
       return {
         changed: false,
         initialized: true,
-        updatedAt: latestSummary.fechaActualizacion,
+        updatedAt: imageResult.updatedAt,
       };
     }
 
@@ -116,19 +160,42 @@ export const monitorOnpeElection = schedules.task({
       };
     }
 
-    const { latestBytes } = await storeLatestOnpeData(latestSummary);
-    const imageResult = await renderLatestOnpeResultsImage();
+    const storeResult = await storeLatestOnpeData(latestSummary);
+
+    if (!storeResult.consistent) {
+      logger.warn("ONPE summary advanced before snapshot caught up", {
+        fechaActualizacion: latestSummary.fechaActualizacion,
+        actasContabilizadas: latestSummary.actasContabilizadas,
+        summaryTotalVotosValidos: latestSummary.totalVotosValidos,
+        snapshotTotalValidVotes: storeResult.snapshotTotalValidVotes,
+        nextBytes: storeResult.latestBytes,
+        snapshotPath: LATEST_SNAPSHOT_PATH,
+        summaryPath: LATEST_SUMMARY_PATH,
+      });
+
+      return {
+        changed: false,
+        initialized: false,
+        pending: true,
+        updatedAt: latestSummary.fechaActualizacion,
+      };
+    }
+
+    const imageResult = await renderLatestOnpeResultsImage(
+      latestSummary,
+      storeResult.snapshot,
+    );
 
     logger.warn("ONPE snapshot changed", {
       fechaActualizacion: latestSummary.fechaActualizacion,
       actasContabilizadas: latestSummary.actasContabilizadas,
-      nextBytes: latestBytes,
+      nextBytes: storeResult.latestBytes,
       snapshotPath: LATEST_SNAPSHOT_PATH,
       summaryPath: LATEST_SUMMARY_PATH,
       imageDirectory: RESULTS_IMAGE_DIRECTORY,
     });
 
-    const updatedAt = latestSummary.fechaActualizacion;
+    const updatedAt = imageResult.updatedAt;
     await sendLatestOnpeChangeAlert(updatedAt, imageResult.url);
 
     return {

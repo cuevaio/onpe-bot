@@ -51,6 +51,23 @@ export const onpeResultsImagePayloadSchema = z.object({
   snapshot: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   subtitle: z.string().min(1).optional(),
+  updatedAt: z.coerce.number().int().nonnegative().optional(),
+  actasContabilizadas: z.coerce.number().nonnegative().optional(),
+  totalVotosValidos: z.coerce.number().int().nonnegative().optional(),
+}).superRefine((payload, ctx) => {
+  const summaryOverrideCount = [
+    payload.updatedAt,
+    payload.actasContabilizadas,
+    payload.totalVotosValidos,
+  ].filter((value) => value !== undefined).length;
+
+  if (summaryOverrideCount > 0 && summaryOverrideCount < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        "updatedAt, actasContabilizadas, and totalVotosValidos must be provided together",
+    });
+  }
 });
 
 export type OnpeResultsImagePayload = z.infer<typeof onpeResultsImagePayloadSchema>;
@@ -249,6 +266,10 @@ export function parseSnapshotEntries(snapshot: string) {
   return {
     totalEntries: parsedSnapshot.data.length,
     candidateEntries: candidateEntries.length,
+    totalValidVotes: candidateEntries.reduce(
+      (sum, entry) => sum + entry.totalVotosValidos,
+      0,
+    ),
     entries: candidateEntries.slice(0, 3),
   };
 }

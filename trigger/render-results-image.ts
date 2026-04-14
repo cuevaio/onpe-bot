@@ -1,15 +1,9 @@
 import { logger, schemaTask } from "@trigger.dev/sdk/v3";
 import { put } from "@vercel/blob";
-import { z } from "zod";
 
 import { setLatestOnpeImageUrl } from "@/lib/cache";
+import { onpeResultsImagePayloadSchema } from "@/lib/render-results";
 import { RESULTS_IMAGE_DIRECTORY } from "@/lib/onpe";
-
-const onpeResultsImagePayloadSchema = z.object({
-  snapshot: z.string().min(1).optional(),
-  title: z.string().min(1).optional(),
-  subtitle: z.string().min(1).optional(),
-});
 
 export const renderOnpeResultsImage = schemaTask({
   id: "render-onpe-results-image",
@@ -19,20 +13,6 @@ export const renderOnpeResultsImage = schemaTask({
     concurrencyLimit: 1,
   },
   run: async (payload) => {
-    const searchParams = new URLSearchParams();
-
-    if (payload.snapshot) {
-      searchParams.set("snapshot", payload.snapshot);
-    }
-
-    if (payload.title) {
-      searchParams.set("title", payload.title);
-    }
-
-    if (payload.subtitle) {
-      searchParams.set("subtitle", payload.subtitle);
-    }
-
     const baseUrl =
       process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
@@ -44,9 +24,14 @@ export const renderOnpeResultsImage = schemaTask({
       );
     }
 
-    const imageUrl = `${baseUrl}/api/onpe/results-image?${searchParams.toString()}`;
+    const imageUrl = `${baseUrl}/api/onpe/results-image`;
     const response = await fetch(imageUrl, {
+      method: "POST",
       cache: "no-store",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(30_000),
     });
 

@@ -41,6 +41,7 @@ export const ONPE_HEADERS = {
 export const onpeSummaryMetadataSchema = z.object({
   fechaActualizacion: z.coerce.number().int().nonnegative(),
   actasContabilizadas: z.coerce.number().nonnegative(),
+  totalVotosValidos: z.coerce.number().int().nonnegative(),
 });
 
 export type OnpeSummaryMetadata = z.infer<typeof onpeSummaryMetadataSchema>;
