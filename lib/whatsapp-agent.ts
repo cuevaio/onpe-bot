@@ -24,7 +24,7 @@ export async function handleInboundMessageWithAgent(params: {
 	recentMessages: ConversationMessage[];
 }) {
 	await generateText({
-		model: openai.chat("gpt-5.4-mini"),
+		model: openai.chat("gpt-5.4"),
 		prompt: [
 			`Current sender state: active=${params.senderState.active}, preferredTopCount=${params.senderState.preferredTopCount}.`,
 			`Recent conversation:\n${params.recentMessages
@@ -34,8 +34,7 @@ export async function handleInboundMessageWithAgent(params: {
 		].join("\n\n"),
 		system:
 			"You route a WhatsApp ONPE bot. Always use one tool. Use the full conversation context. If the user wants to pause updates, use pause_updates. If they want to resume updates, use resume_updates. If they ask for the latest chart, use send_latest_chart. If they want top 3 or top 5, use set_chart_preference with the right topCount. If the request is unclear or not text-friendly, use send_help. Do not answer without a tool.",
-		stopWhen: stepCountIs(3),
-		toolChoice: "required",
+		stopWhen: stepCountIs(1),
 		tools: {
 			pause_updates: tool({
 				description:
