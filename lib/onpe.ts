@@ -18,9 +18,6 @@ export const LATEST_SUMMARY_PATH = "onpe/latest-summary.json";
 
 export const RESULTS_IMAGE_DIRECTORY = "onpe/charts";
 
-export const RESULTS_FONT_URL =
-  `${ONPE_BLOB_BASE_URL}/onpe/assets/NotoSans-Regular.ttf`;
-
 export const LATEST_SNAPSHOT_URL =
   `${ONPE_BLOB_BASE_URL}/${LATEST_SNAPSHOT_PATH}`;
 

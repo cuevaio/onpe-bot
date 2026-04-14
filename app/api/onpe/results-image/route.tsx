@@ -128,8 +128,8 @@ export async function GET(request: Request) {
             flexDirection: "column",
           }}
         >
-          <div style={{ fontSize: 32, fontWeight: 700 }}>{layout.title}</div>
-          <div style={{ fontSize: 18, fontWeight: 500, color: "#606060", marginTop: 10 }}>
+          <div style={{ display: "flex", fontSize: 32, fontWeight: 700 }}>{layout.title}</div>
+          <div style={{ display: "flex", fontSize: 18, fontWeight: 500, color: "#606060", marginTop: 10 }}>
             {layout.subtitle}
           </div>
         </div>
@@ -143,13 +143,13 @@ export async function GET(request: Request) {
             alignItems: "flex-end",
           }}
         >
-          <div style={{ fontSize: 18, fontWeight: 500, color: "#606060" }}>
+          <div style={{ display: "flex", fontSize: 18, fontWeight: 500, color: "#606060" }}>
             Actualizado {formatOnpeUpdateTimestamp(layout.timestamp)}
           </div>
-          <div style={{ fontSize: 56, fontWeight: 700, marginTop: 8 }}>
+          <div style={{ display: "flex", fontSize: 56, fontWeight: 700, marginTop: 8 }}>
             {formatSummaryPercentage(layout.actasContabilizadas)}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 500, color: "#606060" }}>
+          <div style={{ display: "flex", fontSize: 18, fontWeight: 500, color: "#606060" }}>
             Actas contabilizadas
           </div>
         </div>
@@ -164,7 +164,7 @@ export async function GET(request: Request) {
           }}
         />
         {layout.ticks.map((tick) => (
-          <div key={`tick-${tick.value}`}>
+          <div key={`tick-${tick.value}`} style={{ display: "flex" }}>
             <div
               style={{
                 position: "absolute",
@@ -179,6 +179,7 @@ export async function GET(request: Request) {
                 position: "absolute",
                 left: CHART_LEFT - 160,
                 top: tick.y - 14,
+                display: "flex",
                 width: 140,
                 textAlign: "right",
                 fontSize: 23,
@@ -190,7 +191,7 @@ export async function GET(request: Request) {
           </div>
         ))}
         {layout.bars.map((entry, index) => (
-          <div key={`${entry.codigoAgrupacionPolitica}-${index}`}>
+          <div key={`${entry.codigoAgrupacionPolitica}-${index}`} style={{ display: "flex" }}>
             <div
               style={{
                 position: "absolute",
@@ -232,6 +233,7 @@ export async function GET(request: Request) {
                 position: "absolute",
                 left: entry.centerX - 120,
                 top: entry.totalY - 36,
+                display: "flex",
                 width: 240,
                 textAlign: "center",
                 fontSize: 45,
@@ -246,6 +248,7 @@ export async function GET(request: Request) {
                 position: "absolute",
                 left: entry.centerX - 120,
                 top: entry.percentageY - 24,
+                display: "flex",
                 width: 240,
                 textAlign: "center",
                 fontSize: 29,
@@ -275,6 +278,7 @@ export async function GET(request: Request) {
                 position: "absolute",
                 left: entry.centerX - 120,
                 top: entry.logoY + LOGO_SIZE + 8,
+                display: "flex",
                 width: 240,
                 textAlign: "center",
                 fontSize: 21,
