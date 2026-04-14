@@ -540,12 +540,6 @@ export async function POST(request: Request) {
 			throw new Error(`Selected entry metadata not found for index ${selectedEntry.index}`);
 		}
 
-		const senderState = await getSenderState(selectedProcessedEntry.phoneNumber);
-
-		if (!senderState) {
-			throw new Error(`Sender state not found for ${selectedProcessedEntry.phoneNumber}`);
-		}
-
 		if (selectedProcessedEntry.senderInserted) {
 			await sendWelcome(selectedProcessedEntry.phoneNumber);
 			logWebhookEvent("welcome_sent", {
@@ -555,6 +549,12 @@ export async function POST(request: Request) {
 				selectedEntryIndex: selectedProcessedEntry.index,
 			});
 			return new Response("OK", { status: 200 });
+		}
+
+		const senderState = await getSenderState(selectedProcessedEntry.phoneNumber);
+
+		if (!senderState) {
+			throw new Error(`Sender state not found for ${selectedProcessedEntry.phoneNumber}`);
 		}
 
 		const recentMessages: ConversationMessage[] = selectedProcessedEntry.conversationId
