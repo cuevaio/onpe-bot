@@ -17,6 +17,14 @@ import { executeWhatsappAction, sendWelcome } from "@/lib/whatsapp-tools";
 type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
 type NormalizedKapsoMessage = {
   id?: string;
+  messageId?: string;
+  type?: string;
+  body?: string;
+  content?: string;
+  message?: {
+    text?: string;
+    body?: string;
+  };
   from?: string;
   text?: { body?: unknown };
   image?: { caption?: unknown };
@@ -33,7 +41,21 @@ export const runtime = "nodejs";
 const RECEIVED_EVENT = "whatsapp.message.received";
 
 type KapsoMessageReceivedPayload = {
+  message?: {
+    id?: string;
+    type?: string;
+    text?: { body?: unknown };
+    image?: { caption?: unknown };
+    video?: { caption?: unknown };
+    document?: { caption?: unknown };
+    kapso?: {
+      direction?: "inbound" | "outbound";
+      content?: string;
+      whatsappConversationId?: string;
+    };
+  };
   conversation?: {
+    id?: string;
     phone_number?: string;
   };
 };
@@ -95,6 +117,27 @@ async function registerSender(params: {
 }
 
 function readMessageText(message: Record<string, unknown>) {
+  if (typeof message.body === "string" && message.body.trim() !== "") {
+    return message.body.trim();
+  }
+
+  if (typeof message.content === "string" && message.content.trim() !== "") {
+    return message.content.trim();
+  }
+
+  const nestedMessage =
+    typeof message.message === "object" && message.message !== null
+      ? (message.message as { text?: unknown; body?: unknown })
+      : undefined;
+
+  if (typeof nestedMessage?.text === "string" && nestedMessage.text.trim() !== "") {
+    return nestedMessage.text.trim();
+  }
+
+  if (typeof nestedMessage?.body === "string" && nestedMessage.body.trim() !== "") {
+    return nestedMessage.body.trim();
+  }
+
   const text =
     typeof message.text === "object" && message.text !== null
       ? (message.text as { body?: unknown }).body
@@ -136,6 +179,59 @@ function readMessageText(message: Record<string, unknown>) {
 
 function normalizePhoneNumber(value: string | undefined) {
   return value?.replace(/\D/g, "") ?? "";
+}
+
+function getPayloadMessage(payload: KapsoMessageReceivedPayload) {
+  return payload.message ?? null;
+}
+
+function getPayloadMessageText(payload: KapsoMessageReceivedPayload) {
+  const message = getPayloadMessage(payload);
+
+  if (!message) {
+    return "";
+  }
+
+  return readMessageText(message as Record<string, unknown>);
+}
+
+function getPayloadProviderMessageId(payload: KapsoMessageReceivedPayload) {
+  return typeof payload.message?.id === "string" && payload.message.id.trim() !== ""
+    ? payload.message.id.trim()
+    : null;
+}
+
+function getPayloadConversationId(payload: KapsoMessageReceivedPayload) {
+  if (typeof payload.conversation?.id === "string" && payload.conversation.id.trim() !== "") {
+    return payload.conversation.id.trim();
+  }
+
+  if (
+    typeof payload.message?.kapso?.whatsappConversationId === "string" &&
+    payload.message.kapso.whatsappConversationId.trim() !== ""
+  ) {
+    return payload.message.kapso.whatsappConversationId.trim();
+  }
+
+  return null;
+}
+
+function summarizePayloadMessage(payload: KapsoMessageReceivedPayload) {
+  if (!payload.message) {
+    return null;
+  }
+
+  return {
+    id: payload.message.id ?? null,
+    type: payload.message.type ?? null,
+    kapsoDirection: payload.message.kapso?.direction ?? null,
+    kapsoContent: payload.message.kapso?.content ?? null,
+    whatsappConversationId: payload.message.kapso?.whatsappConversationId ?? null,
+    textBody: payload.message.text?.body ?? null,
+    imageCaption: payload.message.image?.caption ?? null,
+    videoCaption: payload.message.video?.caption ?? null,
+    documentCaption: payload.message.document?.caption ?? null,
+  };
 }
 
 function getCurrentInboundMessage(
@@ -187,6 +283,10 @@ async function getConversationHistory(conversationId: string) {
 }
 
 function getProviderMessageId(message: NormalizedKapsoMessage | null) {
+  if (typeof message?.messageId === "string" && message.messageId.trim() !== "") {
+    return message.messageId.trim();
+  }
+
   return typeof message?.id === "string" && message.id.trim() !== ""
     ? message.id.trim()
     : null;
@@ -194,6 +294,30 @@ function getProviderMessageId(message: NormalizedKapsoMessage | null) {
 
 function logWebhookEvent(event: string, metadata: Record<string, unknown>) {
   console.info(`[kapso-webhook] ${event}`, metadata);
+}
+
+function summarizeNormalizedMessage(message: NormalizedKapsoMessage | null) {
+  if (!message) {
+    return null;
+  }
+
+  return {
+    id: message.id ?? null,
+    messageId: message.messageId ?? null,
+    type: message.type ?? null,
+    from: message.from ?? null,
+    kapsoDirection: message.kapso?.direction ?? null,
+    whatsappConversationId: message.kapso?.whatsappConversationId ?? null,
+    body: message.body ?? null,
+    content: message.content ?? null,
+    nestedMessageText: message.message?.text ?? null,
+    nestedMessageBody: message.message?.body ?? null,
+    textBody: message.text?.body ?? null,
+    imageCaption: message.image?.caption ?? null,
+    videoCaption: message.video?.caption ?? null,
+    documentCaption: message.document?.caption ?? null,
+    keys: Object.keys(message),
+  };
 }
 
 function toExecutableAction(
@@ -257,12 +381,19 @@ export async function POST(request: Request) {
 		});
 		const normalized = normalizeWebhook(JSON.parse(rawBody));
 		const normalizedMessages = normalized.messages as NormalizedKapsoMessage[];
-		const currentMessage = getCurrentInboundMessage(
+		const fallbackCurrentMessage = getCurrentInboundMessage(
 			phoneNumber,
 			normalizedMessages,
 		);
-		const currentMessageText = currentMessage ? readMessageText(currentMessage) : "";
-		const providerMessageId = getProviderMessageId(currentMessage);
+		const currentMessageText =
+			getPayloadMessageText(payload) ||
+			(fallbackCurrentMessage ? readMessageText(fallbackCurrentMessage) : "");
+		const providerMessageId =
+			getPayloadProviderMessageId(payload) || getProviderMessageId(fallbackCurrentMessage);
+		const conversationId =
+			getPayloadConversationId(payload) ||
+			fallbackCurrentMessage?.kapso?.whatsappConversationId ||
+			null;
 
 		logWebhookEvent("received", {
 			idempotencyKey,
@@ -272,6 +403,8 @@ export async function POST(request: Request) {
 			duplicate: registration.duplicate,
 			senderInserted: registration.senderInserted,
 			currentMessageText,
+			payloadMessageSummary: summarizePayloadMessage(payload),
+			currentMessageSummary: summarizeNormalizedMessage(fallbackCurrentMessage),
 		});
 
 		if (registration.senderInserted) {
@@ -298,12 +431,23 @@ export async function POST(request: Request) {
 			throw new Error(`Sender state not found for ${phoneNumber}`);
 		}
 
-		const conversationId = currentMessage?.kapso?.whatsappConversationId;
 		const recentMessages: ConversationMessage[] = conversationId
 			? await getConversationHistory(conversationId)
 			: currentMessageText
 				? [{ direction: "inbound" as const, text: currentMessageText }]
 				: [];
+
+		if (!currentMessageText) {
+			logWebhookEvent("skipped_empty_message", {
+				idempotencyKey,
+				phoneNumber,
+				providerMessageId,
+				payloadMessageSummary: summarizePayloadMessage(payload),
+				currentMessageSummary: summarizeNormalizedMessage(fallbackCurrentMessage),
+			});
+			return new Response("OK", { status: 200 });
+		}
+
 		const deterministicAction = parseDeterministicCommand(currentMessageText);
 		let finalAction = deterministicAction;
 		let llmInvoked = false;
