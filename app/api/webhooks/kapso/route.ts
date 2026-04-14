@@ -546,6 +546,17 @@ export async function POST(request: Request) {
 			throw new Error(`Sender state not found for ${selectedProcessedEntry.phoneNumber}`);
 		}
 
+		if (selectedProcessedEntry.senderInserted) {
+			await sendWelcome(selectedProcessedEntry.phoneNumber);
+			logWebhookEvent("welcome_sent", {
+				idempotencyKey,
+				phoneNumber: selectedProcessedEntry.phoneNumber,
+				providerMessageId: selectedProcessedEntry.providerMessageId,
+				selectedEntryIndex: selectedProcessedEntry.index,
+			});
+			return new Response("OK", { status: 200 });
+		}
+
 		const recentMessages: ConversationMessage[] = selectedProcessedEntry.conversationId
 			? await getConversationHistory(selectedProcessedEntry.conversationId)
 			: mergedInboundText
@@ -590,17 +601,6 @@ export async function POST(request: Request) {
 		);
 
 		if (executableAction.type === "none") {
-			if (selectedProcessedEntry.senderInserted) {
-				await sendWelcome(selectedProcessedEntry.phoneNumber);
-				logWebhookEvent("welcome_sent", {
-					idempotencyKey,
-					phoneNumber: selectedProcessedEntry.phoneNumber,
-					providerMessageId: selectedProcessedEntry.providerMessageId,
-					selectedEntryIndex: selectedProcessedEntry.index,
-				});
-				return new Response("OK", { status: 200 });
-			}
-
 			logWebhookEvent("no_action_selected", {
 				idempotencyKey,
 				phoneNumber: selectedProcessedEntry.phoneNumber,
