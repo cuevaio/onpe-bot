@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ONPE Bot
 
-## Getting Started
+WhatsApp bot that monitors ONPE presidential results, regenerates a latest chart image when ONPE publishes a new update, and broadcasts the image to registered users.
 
-First, run the development server:
+## How It Works
+
+1. `trigger/monitor-election.ts` runs every 2 minutes.
+2. It fetches ONPE summary data from `resumen-general/totales`.
+3. It compares `fechaActualizacion` against the last stored summary blob.
+4. When ONPE publishes a new update, it:
+   - fetches the latest candidate snapshot
+   - stores `onpe/latest.json`
+   - stores `onpe/latest-summary.json`
+   - regenerates `onpe/charts/chart-latest.png`
+   - sends a WhatsApp broadcast
+5. The chart image shows:
+   - top 3 candidates
+   - valid votes and vote percentages
+   - `Actas contabilizadas`
+   - ONPE's update timestamp
+
+## Storage
+
+Public blob paths used by the app:
+
+- `onpe/latest.json`: latest candidate snapshot
+- `onpe/latest-summary.json`: latest summary metadata with `fechaActualizacion` and `actasContabilizadas`
+- `onpe/charts/chart-latest.png`: latest generated chart image
+
+## WhatsApp Flow
+
+- Users are registered when they send an inbound WhatsApp message handled by `app/api/webhooks/kapso/route.ts`.
+- Registered numbers are stored in `whatsapp_senders`.
+- Broadcast sends are resolved inside `trigger/send-results-image.ts`.
+- Non-template image sends are limited by WhatsApp's 24-hour customer-care window.
+- The current implementation skips recipients whose most recent inbound message is older than 24 hours, instead of failing the whole batch.
+
+If you want true broadcasts to all registered users regardless of the 24-hour window, add an approved WhatsApp template and send templates for out-of-window recipients.
+
+## Environment Variables
+
+Required server variables:
+
+```bash
+BLOB_READ_WRITE_TOKEN=
+DATABASE_URL=
+KAPSO_WEBHOOK_SECRET=
+KAPSO_API_KEY=
+KAPSO_PHONE_NUMBER_ID=
+```
+
+## Local Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run Next.js:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run checks:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run lint
+npx tsc --noEmit
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Database
 
-## Learn More
+Generate and run migrations with Drizzle:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run db:generate
+npm run db:migrate
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open Drizzle Studio:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run db:studio
+```
 
-## Deploy on Vercel
+## Trigger.dev
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Tasks live in `trigger/` and are configured in `trigger.config.ts`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Key tasks:
+
+- `monitor-election.ts`: polling and orchestration
+- `fetch-summary-metadata.ts`: summary freshness source
+- `fetch-snapshot.ts`: candidate snapshot fetch
+- `render-results-image.ts`: chart generation
+- `send-results-image.ts`: WhatsApp broadcast
+
+## Webhook Registration
+
+`app/api/webhooks/kapso/route.ts`:
+
+- verifies the Kapso signature
+- stores delivery idempotency
+- upserts the sender phone number
+- sends the latest chart image to newly registered users
+
+## Notes
+
+- ONPE freshness is determined only by `fechaActualizacion`.
+- The image uses `actasContabilizadas` from the summary endpoint as the main headline stat.
+- The latest image is regenerated immediately after each detected ONPE update and on first initialization.
