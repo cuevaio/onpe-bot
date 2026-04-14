@@ -49,6 +49,7 @@ export const onpeSnapshotSchema = z.object({
 
 export const onpeResultsImagePayloadSchema = z.object({
   snapshot: z.string().min(1).optional(),
+  topCount: z.union([z.literal(3), z.literal(5)]).default(3),
   title: z.string().min(1).optional(),
   subtitle: z.string().min(1).optional(),
   updatedAt: z.coerce.number().int().nonnegative().optional(),
@@ -253,7 +254,7 @@ export function normalizeSnapshotEntry(entry: OnpeSnapshotEntry) {
   return onpeResultEntrySchema.parse(normalizedEntry);
 }
 
-export function parseSnapshotEntries(snapshot: string) {
+export function parseSnapshotEntries(snapshot: string, topCount: 3 | 5 = 3) {
   const parsedSnapshot = onpeSnapshotSchema.parse(JSON.parse(snapshot));
   const candidateEntries = parsedSnapshot.data
     .map(normalizeSnapshotEntry)
@@ -270,7 +271,7 @@ export function parseSnapshotEntries(snapshot: string) {
       (sum, entry) => sum + entry.totalVotosValidos,
       0,
     ),
-    entries: candidateEntries.slice(0, 3),
+    entries: candidateEntries.slice(0, topCount),
   };
 }
 

@@ -1,7 +1,9 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const whatsappSenders = pgTable("whatsapp_senders", {
   phoneNumber: text("phone_number").primaryKey(),
+  active: boolean("active").default(true).notNull(),
+  preferredTopCount: integer("preferred_top_count").default(3).notNull(),
   registeredAt: timestamp("registered_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

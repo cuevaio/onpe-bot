@@ -55,7 +55,7 @@ export const renderOnpeResultsImage = schemaTask({
     }
 
     const imageBuffer = Buffer.from(await response.arrayBuffer());
-    const timestampedPath = `${RESULTS_IMAGE_DIRECTORY}/chart-${updatedAtNumber}.png`;
+    const timestampedPath = `${RESULTS_IMAGE_DIRECTORY}/chart-top-${payload.topCount}-${updatedAtNumber}.png`;
     const blob = await put(timestampedPath, imageBuffer, {
       access: "public",
       allowOverwrite: true,
@@ -66,14 +66,16 @@ export const renderOnpeResultsImage = schemaTask({
     logger.info("Uploaded ONPE results image", {
       blobPath: blob.pathname,
       url: blob.url,
+      topCount: payload.topCount,
       updatedAt: updatedAtNumber,
     });
 
-    await setLatestOnpeImageUrl(blob.url);
+    await setLatestOnpeImageUrl(payload.topCount, blob.url);
 
     return {
       createdAt: new Date().toISOString(),
       updatedAt: updatedAtNumber,
+      topCount: payload.topCount,
       pathname: blob.pathname,
       size: imageBuffer.length,
       title: payload.title,

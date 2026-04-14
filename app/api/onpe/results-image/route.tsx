@@ -96,7 +96,7 @@ async function readImageInputs(
     readSnapshotPromise,
   ]);
 
-  const parsed = parseSnapshotEntries(snapshotResult);
+  const parsed = parseSnapshotEntries(snapshotResult, payload.topCount);
 
   if (parsed.totalValidVotes !== summaryResult.totalVotosValidos) {
     throw new Error(
@@ -357,6 +357,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const payload = onpeResultsImagePayloadSchema.parse({
       snapshot: url.searchParams.get("snapshot") ?? undefined,
+      topCount:
+        url.searchParams.get("topCount") === null
+          ? undefined
+          : Number(url.searchParams.get("topCount")),
       title: url.searchParams.get("title") ?? undefined,
       subtitle: url.searchParams.get("subtitle") ?? undefined,
       updatedAt: url.searchParams.get("updatedAt") ?? undefined,

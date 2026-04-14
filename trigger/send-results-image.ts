@@ -1,127 +1,129 @@
 import { logger, schemaTask } from "@trigger.dev/sdk/v3";
-import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { getDb } from "@/db";
-import { kapsoWebhookDeliveries, whatsappSenders } from "@/db/schema";
 import { env } from "@/env";
-import { getLatestOnpeImageUrl } from "@/lib/cache";
+import type { OnpeTopCount } from "@/lib/cache";
+import { ensureLatestOnpeImageUrl } from "@/lib/onpe-images";
 import { kapsoClient } from "@/lib/kapso";
-
-const RECEIVED_EVENT = "whatsapp.message.received";
-const CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1000;
+import { getActiveBroadcastRecipients, getRecipientStates } from "@/lib/whatsapp-senders";
 
 const onpeSendResultsImagePayloadSchema = z.object({
   recipients: z.array(z.string().min(1)).min(1).optional(),
   caption: z.string().min(1),
   imageUrl: z.string().url().optional(),
+  topCount: z.union([z.literal(3), z.literal(5)]).optional(),
 });
 
-function normalizeTimestamp(value: Date | string | null) {
-  if (!value) {
-    return null;
-  }
+async function sendImageBatch(params: {
+  recipients: string[];
+  caption: string;
+  imageUrl: string;
+}) {
+  const failedRecipients: string[] = [];
 
-  const timestamp = value instanceof Date ? value : new Date(value);
+  for (const recipient of params.recipients) {
+    try {
+      await kapsoClient.messages.sendImage({
+        phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
+        to: recipient,
+        image: {
+          link: params.imageUrl,
+          caption: params.caption,
+        },
+      });
+    } catch (error) {
+      failedRecipients.push(recipient);
 
-  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
-}
-
-async function getBroadcastRecipients() {
-  const db = getDb();
-  const rows = await db
-    .select({
-      phoneNumber: whatsappSenders.phoneNumber,
-      lastReceivedAt: sql<Date | string | null>`max(${kapsoWebhookDeliveries.receivedAt})`,
-    })
-    .from(whatsappSenders)
-    .leftJoin(
-      kapsoWebhookDeliveries,
-      and(
-        eq(kapsoWebhookDeliveries.phoneNumber, whatsappSenders.phoneNumber),
-        eq(kapsoWebhookDeliveries.eventType, RECEIVED_EVENT),
-      ),
-    )
-    .groupBy(whatsappSenders.phoneNumber);
-
-  const customerCareThreshold = Date.now() - CUSTOMER_CARE_WINDOW_MS;
-  const activeRecipients: string[] = [];
-  const skippedRecipients: string[] = [];
-
-  for (const row of rows) {
-    const lastReceivedAt = normalizeTimestamp(row.lastReceivedAt);
-
-    if (lastReceivedAt && lastReceivedAt.getTime() >= customerCareThreshold) {
-      activeRecipients.push(row.phoneNumber);
-      continue;
+      logger.error("Failed to send ONPE results image", {
+        recipient,
+        url: params.imageUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-
-    skippedRecipients.push(row.phoneNumber);
   }
 
-  return {
-    allRecipients: rows.map((row) => row.phoneNumber),
-    activeRecipients,
-    skippedRecipients,
-  };
+  return failedRecipients;
 }
 
 export const sendOnpeResultsImage = schemaTask({
   id: "send-onpe-results-image",
   schema: onpeSendResultsImagePayloadSchema,
   maxDuration: 300,
-  run: async ({ recipients, caption, imageUrl }) => {
-    const resolvedImageUrl = imageUrl ?? (await getLatestOnpeImageUrl());
-
-    if (!resolvedImageUrl) {
-      throw new Error("No cached ONPE image URL available for WhatsApp send");
-    }
-
-    const resolvedRecipients = recipients
-      ? {
-          allRecipients: recipients,
-          activeRecipients: recipients,
-          skippedRecipients: [],
-        }
-      : await getBroadcastRecipients();
+  run: async ({ recipients, caption, imageUrl, topCount }) => {
     const failedRecipients: string[] = [];
 
-    for (const recipient of resolvedRecipients.activeRecipients) {
-      try {
-        await kapsoClient.messages.sendImage({
-          phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
-          to: recipient,
-          image: {
-            link: resolvedImageUrl,
-            caption,
-          },
-        });
-      } catch (error) {
-        failedRecipients.push(recipient);
+    if (recipients) {
+      const recipientStates = await getRecipientStates(recipients);
+      const recipientTopCount = topCount ?? recipientStates[0]?.preferredTopCount ?? 3;
+      const resolvedImageUrl = imageUrl ?? (await ensureLatestOnpeImageUrl(recipientTopCount));
 
-        logger.error("Failed to send ONPE results image", {
-          recipient,
-          url: resolvedImageUrl,
-          error: error instanceof Error ? error.message : String(error),
-        });
+      failedRecipients.push(
+        ...(await sendImageBatch({
+          recipients,
+          caption,
+          imageUrl: resolvedImageUrl,
+        })),
+      );
+
+      logger.info("Sent ONPE results image", {
+        recipients: recipients.length,
+        sent: recipients.length - failedRecipients.length,
+        skipped: 0,
+        failed: failedRecipients.length,
+        url: resolvedImageUrl,
+        topCount: recipientTopCount,
+      });
+
+      return {
+        recipients: recipients.length,
+        sentRecipients: recipients.length - failedRecipients.length,
+        skippedRecipients: 0,
+        failedRecipients: failedRecipients.length,
+        url: resolvedImageUrl,
+      };
+    }
+
+    const resolvedRecipients = await getActiveBroadcastRecipients();
+    const sentUrls = new Map<OnpeTopCount, string>();
+
+    for (const currentTopCount of [3, 5] as const) {
+      const recipientsForTopCount = resolvedRecipients.groupedRecipients[currentTopCount];
+
+      if (recipientsForTopCount.length === 0) {
+        continue;
       }
+
+      const resolvedImageUrl = imageUrl ?? (await ensureLatestOnpeImageUrl(currentTopCount));
+      sentUrls.set(currentTopCount, resolvedImageUrl);
+      failedRecipients.push(
+        ...(await sendImageBatch({
+          recipients: recipientsForTopCount,
+          caption,
+          imageUrl: resolvedImageUrl,
+        })),
+      );
     }
 
     logger.info("Sent ONPE results image", {
       recipients: resolvedRecipients.allRecipients.length,
-      sent: resolvedRecipients.activeRecipients.length - failedRecipients.length,
+      sent:
+        resolvedRecipients.groupedRecipients[3].length +
+        resolvedRecipients.groupedRecipients[5].length -
+        failedRecipients.length,
       skipped: resolvedRecipients.skippedRecipients.length,
       failed: failedRecipients.length,
-      url: resolvedImageUrl,
+      urls: Object.fromEntries(sentUrls),
     });
 
     return {
       recipients: resolvedRecipients.allRecipients.length,
       sentRecipients:
-        resolvedRecipients.activeRecipients.length - failedRecipients.length,
+        resolvedRecipients.groupedRecipients[3].length +
+        resolvedRecipients.groupedRecipients[5].length -
+        failedRecipients.length,
       skippedRecipients: resolvedRecipients.skippedRecipients.length,
       failedRecipients: failedRecipients.length,
-      url: resolvedImageUrl,
+      url: sentUrls.get(3) ?? sentUrls.get(5) ?? null,
     };
   },
 });

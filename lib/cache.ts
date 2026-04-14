@@ -2,17 +2,21 @@ import { Redis } from "@upstash/redis";
 
 import { env } from "@/env";
 
-const LATEST_ONPE_IMAGE_URL_KEY = "onpe:latest-image-url";
+export type OnpeTopCount = 3 | 5;
+
+function getLatestOnpeImageUrlKey(topCount: OnpeTopCount) {
+  return `onpe:latest-image-url:top-${topCount}`;
+}
 
 const redis = new Redis({
   url: env.UPSTASH_REDIS_REST_URL,
   token: env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-export async function getLatestOnpeImageUrl() {
-  return redis.get<string>(LATEST_ONPE_IMAGE_URL_KEY);
+export async function getLatestOnpeImageUrl(topCount: OnpeTopCount) {
+  return redis.get<string>(getLatestOnpeImageUrlKey(topCount));
 }
 
-export async function setLatestOnpeImageUrl(url: string) {
-  await redis.set(LATEST_ONPE_IMAGE_URL_KEY, url);
+export async function setLatestOnpeImageUrl(topCount: OnpeTopCount, url: string) {
+  await redis.set(getLatestOnpeImageUrlKey(topCount), url);
 }

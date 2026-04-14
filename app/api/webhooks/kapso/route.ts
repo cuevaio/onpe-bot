@@ -1,20 +1,25 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { sql } from "drizzle-orm";
+import { normalizeWebhook } from "@kapso/whatsapp-cloud-api/server";
 
 import { getDb } from "@/db";
 import { env } from "@/env";
-import { getLatestOnpeImageUrl } from "@/lib/cache";
+import { handleInboundMessageWithAgent } from "@/lib/whatsapp-agent";
 import { kapsoClient } from "@/lib/kapso";
+import { getSenderState } from "@/lib/whatsapp-senders";
+import { sendWelcome } from "@/lib/whatsapp-tools";
+
+type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
 
 export const runtime = "nodejs";
 
 const RECEIVED_EVENT = "whatsapp.message.received";
 
 type KapsoMessageReceivedPayload = {
-	conversation?: {
-		phone_number?: string;
-	};
+  conversation?: {
+    phone_number?: string;
+  };
 };
 
 function verifySignature(rawBody: string, signature: string, secret: string) {
@@ -73,6 +78,33 @@ async function registerSender(params: {
 	};
 }
 
+function readMessageText(message: Record<string, unknown>) {
+  const text =
+    typeof message.text === "object" && message.text !== null
+      ? (message.text as { body?: unknown }).body
+      : undefined;
+
+  return typeof text === "string" ? text.trim() : "";
+}
+
+async function getConversationHistory(conversationId: string) {
+	const response = await kapsoClient.messages.listByConversation({
+		phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
+		conversationId,
+		limit: 12,
+	});
+
+	const messages: ConversationMessage[] = response.data
+		.map((message): ConversationMessage => ({
+			direction:
+				message.kapso?.direction === "outbound" ? "outbound" : "inbound",
+			text: readMessageText(message),
+		}))
+		.filter((message) => message.text.length > 0);
+
+	return messages;
+}
+
 export async function POST(request: Request) {
 	const signature = request.headers.get("x-webhook-signature")?.trim();
 	const idempotencyKey = request.headers.get("x-idempotency-key")?.trim();
@@ -112,25 +144,40 @@ export async function POST(request: Request) {
 			eventType,
 			phoneNumber,
 		});
+		const normalized = normalizeWebhook(JSON.parse(rawBody));
+		const currentMessage = normalized.messages.find(
+			(message) => message.from?.trim() === phoneNumber,
+		);
+		const currentMessageText = currentMessage ? readMessageText(currentMessage) : "";
 
 		if (registration.senderInserted) {
-			const imageUrl = await getLatestOnpeImageUrl();
-
-			if (!imageUrl) {
-				throw new Error(
-					"No cached ONPE image URL available for new user welcome message",
-				);
-			}
-
-			await kapsoClient.messages.sendImage({
-				phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
-				to: phoneNumber,
-				image: {
-					link: imageUrl,
-					caption: `Bienvenidx. Estos son los ultimos resultados presidenciales de ONPE. Te enviaremos actualizaciones automáticamente.`,
-				},
-			});
+			await sendWelcome(phoneNumber);
+			return new Response("OK", { status: 200 });
 		}
+
+		if (registration.duplicate) {
+			return new Response("OK", { status: 200 });
+		}
+
+		const senderState = await getSenderState(phoneNumber);
+
+		if (!senderState) {
+			throw new Error(`Sender state not found for ${phoneNumber}`);
+		}
+
+		const conversationId = currentMessage?.kapso?.whatsappConversationId;
+		const recentMessages: ConversationMessage[] = conversationId
+			? await getConversationHistory(conversationId)
+			: currentMessageText
+				? [{ direction: "inbound" as const, text: currentMessageText }]
+				: [];
+
+		await handleInboundMessageWithAgent({
+			phoneNumber,
+			senderState,
+			currentMessage: currentMessageText,
+			recentMessages,
+		});
 	} catch (error) {
 		console.error("Failed to persist Kapso sender", {
 			eventType,

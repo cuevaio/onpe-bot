@@ -61,24 +61,36 @@ async function renderLatestOnpeResultsImage(
   summary: OnpeSummaryMetadata,
   snapshot: string,
 ) {
-  const renderResult = await renderOnpeResultsImage.triggerAndWait({
-    snapshot,
-    updatedAt: summary.fechaActualizacion,
-    actasContabilizadas: summary.actasContabilizadas,
-    totalVotosValidos: summary.totalVotosValidos,
-  });
+  const renderResults = await Promise.all(
+    ([3, 5] as const).map((topCount) =>
+      renderOnpeResultsImage.triggerAndWait({
+        snapshot,
+        topCount,
+        updatedAt: summary.fechaActualizacion,
+        actasContabilizadas: summary.actasContabilizadas,
+        totalVotosValidos: summary.totalVotosValidos,
+      }),
+    ),
+  );
 
-  if (!renderResult.ok) {
-    throw renderResult.error;
+  for (const renderResult of renderResults) {
+    if (!renderResult.ok) {
+      throw renderResult.error;
+    }
   }
 
-  return renderResult.output;
+  return renderResults.map((renderResult) => {
+    if (!renderResult.ok) {
+      throw renderResult.error;
+    }
+
+    return renderResult.output;
+  });
 }
 
-async function sendLatestOnpeChangeAlert(updatedAt: number, imageUrl: string) {
+async function sendLatestOnpeChangeAlert(updatedAt: number) {
   const alertResult = await sendOnpeChangeAlert.triggerAndWait({
     updatedAt,
-    imageUrl,
   });
 
   if (!alertResult.ok) {
@@ -137,12 +149,12 @@ export const monitorOnpeElection = schedules.task({
         latestSummary,
         storeResult.snapshot,
       );
-      await sendLatestOnpeChangeAlert(imageResult.updatedAt, imageResult.url);
+      await sendLatestOnpeChangeAlert(imageResult[0].updatedAt);
 
       return {
         changed: false,
         initialized: true,
-        updatedAt: imageResult.updatedAt,
+        updatedAt: imageResult[0].updatedAt,
       };
     }
 
@@ -195,8 +207,8 @@ export const monitorOnpeElection = schedules.task({
       imageDirectory: RESULTS_IMAGE_DIRECTORY,
     });
 
-    const updatedAt = imageResult.updatedAt;
-    await sendLatestOnpeChangeAlert(updatedAt, imageResult.url);
+    const updatedAt = imageResult[0].updatedAt;
+    await sendLatestOnpeChangeAlert(updatedAt);
 
     return {
       changed: true,
