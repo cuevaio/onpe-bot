@@ -61,31 +61,25 @@ async function renderLatestOnpeResultsImage(
   summary: OnpeSummaryMetadata,
   snapshot: string,
 ) {
-  const renderResults = await Promise.all(
-    ([3, 5] as const).map((topCount) =>
-      renderOnpeResultsImage.triggerAndWait({
-        snapshot,
-        topCount,
-        updatedAt: summary.fechaActualizacion,
-        actasContabilizadas: summary.actasContabilizadas,
-        totalVotosValidos: summary.totalVotosValidos,
-      }),
-    ),
-  );
+  const renderResults = [];
 
-  for (const renderResult of renderResults) {
+  for (const topCount of [3, 5] as const) {
+    const renderResult = await renderOnpeResultsImage.triggerAndWait({
+      snapshot,
+      topCount,
+      updatedAt: summary.fechaActualizacion,
+      actasContabilizadas: summary.actasContabilizadas,
+      totalVotosValidos: summary.totalVotosValidos,
+    });
+
     if (!renderResult.ok) {
       throw renderResult.error;
     }
+
+    renderResults.push(renderResult.output);
   }
 
-  return renderResults.map((renderResult) => {
-    if (!renderResult.ok) {
-      throw renderResult.error;
-    }
-
-    return renderResult.output;
-  });
+  return renderResults;
 }
 
 async function sendLatestOnpeChangeAlert(updatedAt: number) {
