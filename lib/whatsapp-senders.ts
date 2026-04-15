@@ -13,6 +13,11 @@ export type SenderState = {
   preferredTopCount: OnpeTopCount;
 };
 
+export type SenderCumulativeCountPoint = {
+  timestamp: string;
+  count: number;
+};
+
 function normalizeTopCount(value: number): OnpeTopCount {
   return value === 5 ? 5 : 3;
 }
@@ -124,4 +129,45 @@ export async function getActiveBroadcastRecipients() {
     groupedRecipients,
     skippedRecipients,
   };
+}
+
+export async function getCumulativeSenderCountSeries(): Promise<SenderCumulativeCountPoint[]> {
+  const db = getDb();
+  const rows = await db.execute<{
+    timestamp: string;
+    count: number | string;
+  }>(sql`
+    SELECT
+      to_char(
+        to_timestamp(floor(extract(epoch from ${whatsappSenders.registeredAt}) / 900) * 900) AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+      ) AS "timestamp",
+      COUNT(*)::int AS "count"
+    FROM ${whatsappSenders}
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `);
+
+  if (rows.rows.length === 0) {
+    return [];
+  }
+
+  let runningCount = 0;
+  const firstTimestamp = new Date(rows.rows[0].timestamp);
+  const zeroPoint = new Date(firstTimestamp.getTime() - 15 * 60 * 1000).toISOString();
+
+  return [
+    {
+      timestamp: zeroPoint,
+      count: 0,
+    },
+    ...rows.rows.map((row) => {
+      runningCount += Number(row.count);
+
+      return {
+        timestamp: row.timestamp,
+        count: runningCount,
+      };
+    }),
+  ];
 }
