@@ -448,7 +448,7 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 				}}
 			>
 				<div style={{ display: "flex", marginBottom: 4 }}>
-					+1 (201) 277-2422
+					+1 (201) 277-5162
 				</div>
 				elecciones.cueva.io
 			</div>
