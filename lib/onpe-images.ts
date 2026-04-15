@@ -1,9 +1,8 @@
 import type { OnpeTopCount } from "@/lib/cache";
 import { getLatestOnpeImageUrl } from "@/lib/cache";
 import { formatOnpeUpdateTimestamp, LATEST_SNAPSHOT_URL, LATEST_SUMMARY_URL, onpeSummaryMetadataSchema } from "@/lib/onpe";
-import { kapsoClient } from "@/lib/kapso";
 import { renderOnpeResultsImage } from "@/trigger/render-results-image";
-import { env } from "@/env";
+import { sendKapsoMessage } from "@/trigger/send-kapso-message";
 
 const ONPE_IMAGE_PATHNAME_PATTERN = /\/chart-top-(3|5)-(\d+)\.png$/;
 
@@ -86,16 +85,18 @@ export async function sendLatestChartToRecipient(params: {
 }) {
   const imageUrl = await ensureLatestOnpeImageUrl(params.topCount);
 
-  await kapsoClient.messages.sendImage({
-    phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
+  const sendResult = await sendKapsoMessage.triggerAndWait({
+    type: "image",
     to: params.phoneNumber,
-    image: {
-      link: imageUrl,
-      caption:
-        params.caption ??
-        `Actualizacion ONPE: ${formatOnpeUpdateTimestamp(Date.now())}`,
-    },
+    imageUrl,
+    caption:
+      params.caption ??
+      `Actualizacion ONPE: ${formatOnpeUpdateTimestamp(Date.now())}`,
   });
+
+  if (!sendResult.ok) {
+    throw sendResult.error;
+  }
 
   return imageUrl;
 }

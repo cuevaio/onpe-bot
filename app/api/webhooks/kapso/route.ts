@@ -1,9 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { sql } from "drizzle-orm";
 import { normalizeWebhook } from "@kapso/whatsapp-cloud-api/server";
 
-import { getDb } from "@/db";
 import { env } from "@/env";
 import {
   parseDeterministicCommand,
@@ -11,8 +9,9 @@ import {
 } from "@/lib/whatsapp-command-router";
 import { handleInboundMessageWithAgent } from "@/lib/whatsapp-agent";
 import { kapsoClient } from "@/lib/kapso";
+import { registerWebhookDelivery } from "@/lib/kapso-webhook-deliveries";
 import { getSenderState } from "@/lib/whatsapp-senders";
-import { executeWhatsappAction, sendWelcome } from "@/lib/whatsapp-tools";
+import { processKapsoWebhookReply } from "@/trigger/process-webhook-reply";
 
 type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
 type NormalizedKapsoMessage = {
@@ -92,55 +91,6 @@ function verifySignature(rawBody: string, signature: string, secret: string) {
 	}
 
 	return timingSafeEqual(receivedSignature, expectedSignatureBuffer);
-}
-
-async function registerSender(params: {
-	idempotencyKey: string;
-	eventType: string;
-	phoneNumber: string;
-}) {
-	const db = getDb();
-
-	const result = await db.execute(sql<{
-		deliveryInserted: boolean;
-		senderInserted: boolean;
-	}>`
-    WITH inserted_delivery AS (
-      INSERT INTO ${sql.identifier("kapso_webhook_deliveries")} (
-        ${sql.identifier("idempotency_key")},
-        ${sql.identifier("event_type")},
-        ${sql.identifier("phone_number")}
-      )
-      VALUES (${params.idempotencyKey}, ${params.eventType}, ${params.phoneNumber})
-      ON CONFLICT ("idempotency_key") DO NOTHING
-      RETURNING 1
-    ),
-    inserted_sender AS (
-      INSERT INTO ${sql.identifier("whatsapp_senders")} (${sql.identifier("phone_number")})
-      SELECT ${params.phoneNumber}
-      WHERE EXISTS (SELECT 1 FROM inserted_delivery)
-      ON CONFLICT ("phone_number") DO NOTHING
-      RETURNING 1
-    )
-    SELECT
-      EXISTS (SELECT 1 FROM inserted_delivery) AS "deliveryInserted",
-      EXISTS (SELECT 1 FROM inserted_sender) AS "senderInserted"
-  `);
-
-	const row = result.rows[0];
-
-	return {
-		duplicate: !row?.deliveryInserted,
-		senderInserted: Boolean(row?.senderInserted),
-	};
-}
-
-async function registerDelivery(params: {
-	idempotencyKey: string;
-	eventType: string;
-	phoneNumber: string;
-}) {
-	return registerSender(params);
 }
 
 function readMessageText(message: Record<string, unknown>) {
@@ -390,30 +340,6 @@ function logWebhookEvent(event: string, metadata: Record<string, unknown>) {
   console.info(`[kapso-webhook] ${event}`, metadata);
 }
 
-function summarizeNormalizedMessage(message: NormalizedKapsoMessage | null) {
-  if (!message) {
-    return null;
-  }
-
-  return {
-    id: message.id ?? null,
-    messageId: message.messageId ?? null,
-    type: message.type ?? null,
-    from: message.from ?? null,
-    kapsoDirection: message.kapso?.direction ?? null,
-    whatsappConversationId: message.kapso?.whatsappConversationId ?? null,
-    body: message.body ?? null,
-    content: message.content ?? null,
-    nestedMessageText: message.message?.text ?? null,
-    nestedMessageBody: message.message?.body ?? null,
-    textBody: message.text?.body ?? null,
-    imageCaption: message.image?.caption ?? null,
-    videoCaption: message.video?.caption ?? null,
-    documentCaption: message.document?.caption ?? null,
-    keys: Object.keys(message),
-  };
-}
-
 function toExecutableAction(
   action: DeterministicCommandAction,
   senderTopCount: 3 | 5,
@@ -476,32 +402,39 @@ export async function POST(request: Request) {
 		}
 
 		const processedEntries: Array<
-			InboundWebhookEntry & { duplicate: boolean; senderInserted: boolean }
+			InboundWebhookEntry & {
+				duplicate: boolean;
+				senderInserted: boolean;
+				deliveryKey: string;
+			}
 		> = [];
 
 		for (const entry of inboundEntries) {
-			const registration = await registerDelivery({
-				idempotencyKey: buildDeliveryKey(idempotencyKey, entry),
+			const deliveryKey = buildDeliveryKey(idempotencyKey, entry);
+			const senderState = await getSenderState(entry.phoneNumber);
+			const registration = await registerWebhookDelivery({
+				idempotencyKey: deliveryKey,
 				eventType,
 				phoneNumber: entry.phoneNumber,
+				senderInsertedAtDelivery: !senderState,
 			});
 
 			processedEntries.push({
 				...entry,
+				deliveryKey,
 				duplicate: registration.duplicate,
-				senderInserted: registration.senderInserted,
+				senderInserted: registration.senderInsertedAtDelivery,
 			});
 		}
 
-		const uniqueEntries = processedEntries.filter((entry) => !entry.duplicate);
-		const selectedEntry = selectResponseEntry(uniqueEntries);
-		const mergedInboundText = mergeInboundTexts(uniqueEntries);
+		const selectedEntry = selectResponseEntry(processedEntries);
+		const mergedInboundText = mergeInboundTexts(processedEntries);
 
 		logWebhookEvent("received", {
 			idempotencyKey,
 			eventType,
 			batch: Array.isArray((payload as KapsoBatchPayload).data),
-			batchSize: (payload as KapsoBatchPayload).batch_info?.size ?? uniqueEntries.length,
+			batchSize: (payload as KapsoBatchPayload).batch_info?.size ?? processedEntries.length,
 			batchConversationId:
 				(payload as KapsoBatchPayload).batch_info?.conversation_id ?? null,
 			entries: processedEntries.map((entry) => ({
@@ -517,7 +450,7 @@ export async function POST(request: Request) {
 			selectedEntryIndex: selectedEntry?.index ?? null,
 		});
 
-		if (uniqueEntries.length === 0) {
+		if (processedEntries.length === 0) {
 			logWebhookEvent("skipped_duplicate", {
 				idempotencyKey,
 				entries: processedEntries.map((entry) => ({
@@ -525,7 +458,6 @@ export async function POST(request: Request) {
 					providerMessageId: entry.providerMessageId,
 				})),
 			});
-			return new Response("OK", { status: 200 });
 		}
 
 		if (!selectedEntry) {
@@ -540,30 +472,9 @@ export async function POST(request: Request) {
 			throw new Error(`Selected entry metadata not found for index ${selectedEntry.index}`);
 		}
 
-		if (selectedProcessedEntry.senderInserted) {
-			await sendWelcome(selectedProcessedEntry.phoneNumber);
-			logWebhookEvent("welcome_sent", {
-				idempotencyKey,
-				phoneNumber: selectedProcessedEntry.phoneNumber,
-				providerMessageId: selectedProcessedEntry.providerMessageId,
-				selectedEntryIndex: selectedProcessedEntry.index,
-			});
-			return new Response("OK", { status: 200 });
-		}
+		let executableAction: ReturnType<typeof toExecutableAction> | null = null;
 
-		const senderState = await getSenderState(selectedProcessedEntry.phoneNumber);
-
-		if (!senderState) {
-			throw new Error(`Sender state not found for ${selectedProcessedEntry.phoneNumber}`);
-		}
-
-		const recentMessages: ConversationMessage[] = selectedProcessedEntry.conversationId
-			? await getConversationHistory(selectedProcessedEntry.conversationId)
-			: mergedInboundText
-				? [{ direction: "inbound" as const, text: mergedInboundText }]
-				: [];
-
-		if (!mergedInboundText) {
+		if (!selectedProcessedEntry.senderInserted && !mergedInboundText) {
 			logWebhookEvent("skipped_empty_message", {
 				idempotencyKey,
 				selectedEntryIndex: selectedEntry.index,
@@ -571,55 +482,83 @@ export async function POST(request: Request) {
 			return new Response("OK", { status: 200 });
 		}
 
-		const deterministicAction = parseDeterministicCommand(mergedInboundText);
-		let finalAction = deterministicAction;
-		let llmInvoked = false;
+		if (!selectedProcessedEntry.senderInserted) {
+			const senderState = await getSenderState(selectedProcessedEntry.phoneNumber);
 
-		if (deterministicAction.type === "none") {
-			llmInvoked = true;
-			finalAction = await handleInboundMessageWithAgent({
-				phoneNumber: selectedProcessedEntry.phoneNumber,
-				senderState,
-				currentMessage: mergedInboundText,
-				recentMessages,
-			});
-		}
+			if (!senderState) {
+				throw new Error(`Sender state not found for ${selectedProcessedEntry.phoneNumber}`);
+			}
 
-		logWebhookEvent("action_selected", {
-			idempotencyKey,
-			phoneNumber: selectedProcessedEntry.phoneNumber,
-			providerMessageId: selectedProcessedEntry.providerMessageId,
-			deterministicAction,
-			llmInvoked,
-			finalAction,
-			selectedEntryIndex: selectedProcessedEntry.index,
-		});
+			const recentMessages: ConversationMessage[] = selectedProcessedEntry.conversationId
+				? await getConversationHistory(selectedProcessedEntry.conversationId)
+				: [{ direction: "inbound" as const, text: mergedInboundText }];
 
-		const executableAction = toExecutableAction(
-			finalAction,
-			senderState.preferredTopCount,
-		);
+			const deterministicAction = parseDeterministicCommand(mergedInboundText);
+			let finalAction = deterministicAction;
+			let llmInvoked = false;
 
-		if (executableAction.type === "none") {
-			logWebhookEvent("no_action_selected", {
+			if (deterministicAction.type === "none") {
+				llmInvoked = true;
+				finalAction = await handleInboundMessageWithAgent({
+					phoneNumber: selectedProcessedEntry.phoneNumber,
+					senderState,
+					currentMessage: mergedInboundText,
+					recentMessages,
+				});
+			}
+
+			logWebhookEvent("action_selected", {
 				idempotencyKey,
 				phoneNumber: selectedProcessedEntry.phoneNumber,
 				providerMessageId: selectedProcessedEntry.providerMessageId,
-				mergedInboundText,
+				deterministicAction,
+				llmInvoked,
+				finalAction,
+				selectedEntryIndex: selectedProcessedEntry.index,
 			});
-			return new Response("OK", { status: 200 });
+
+			const resolvedAction = toExecutableAction(finalAction, senderState.preferredTopCount);
+
+			if (resolvedAction.type === "none") {
+				logWebhookEvent("no_action_selected", {
+					idempotencyKey,
+					phoneNumber: selectedProcessedEntry.phoneNumber,
+					providerMessageId: selectedProcessedEntry.providerMessageId,
+					mergedInboundText,
+				});
+				return new Response("OK", { status: 200 });
+			}
+
+			executableAction = resolvedAction;
 		}
 
-		await executeWhatsappAction({
-			phoneNumber: selectedProcessedEntry.phoneNumber,
-			action: executableAction,
-		});
+		const handoffResult = await processKapsoWebhookReply.triggerAndWait(
+			{
+				idempotencyKey,
+				phoneNumber: selectedProcessedEntry.phoneNumber,
+				providerMessageId: selectedProcessedEntry.providerMessageId,
+				conversationId: selectedProcessedEntry.conversationId,
+				mergedInboundText,
+				senderInsertedAtDelivery: selectedProcessedEntry.senderInserted,
+				action: executableAction,
+			},
+			{
+				idempotencyKey: `kapso-webhook-reply:${selectedProcessedEntry.deliveryKey}`,
+			},
+		);
 
-		logWebhookEvent("action_executed", {
+		if (!handoffResult.ok) {
+			throw handoffResult.error;
+		}
+
+		logWebhookEvent("reply_handed_off", {
 			idempotencyKey,
 			phoneNumber: selectedProcessedEntry.phoneNumber,
 			providerMessageId: selectedProcessedEntry.providerMessageId,
-			executedAction: executableAction,
+			deliveryKey: selectedProcessedEntry.deliveryKey,
+			action: executableAction,
+			senderInserted: selectedProcessedEntry.senderInserted,
+			taskStatus: handoffResult.output.status,
 			selectedEntryIndex: selectedProcessedEntry.index,
 		});
 	} catch (error) {

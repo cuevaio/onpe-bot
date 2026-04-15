@@ -13,6 +13,9 @@ export const kapsoWebhookDeliveries = pgTable("kapso_webhook_deliveries", {
   idempotencyKey: text("idempotency_key").primaryKey(),
   eventType: text("event_type").notNull(),
   phoneNumber: text("phone_number"),
+  senderInsertedAtDelivery: boolean("sender_inserted_at_delivery")
+    .default(false)
+    .notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

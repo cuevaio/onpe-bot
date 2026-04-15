@@ -1,11 +1,10 @@
 import { logger, schemaTask } from "@trigger.dev/sdk/v3";
 import { z } from "zod";
 
-import { env } from "@/env";
 import type { OnpeTopCount } from "@/lib/cache";
 import { ensureLatestOnpeImageUrl } from "@/lib/onpe-images";
-import { kapsoClient } from "@/lib/kapso";
 import { getActiveBroadcastRecipients, getRecipientStates } from "@/lib/whatsapp-senders";
+import { sendKapsoMessage } from "@/trigger/send-kapso-message";
 
 const onpeSendResultsImagePayloadSchema = z.object({
   recipients: z.array(z.string().min(1)).min(1).optional(),
@@ -20,7 +19,7 @@ const onpeSendResultsImagePayloadSchema = z.object({
     .optional(),
 });
 
-const SEND_IMAGE_BATCH_SIZE = 10;
+const SEND_IMAGE_BATCH_SIZE = 100;
 
 function chunkRecipients(recipients: string[], size: number) {
   const batches: string[][] = [];
@@ -43,21 +42,19 @@ async function sendImageBatch(params: {
     params.recipients,
     SEND_IMAGE_BATCH_SIZE,
   )) {
-    const results = await Promise.allSettled(
-      recipientsBatch.map((recipient) =>
-        kapsoClient.messages.sendImage({
-          phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
+    const result = await sendKapsoMessage.batchTriggerAndWait(
+      recipientsBatch.map((recipient) => ({
+        payload: {
+          type: "image" as const,
           to: recipient,
-          image: {
-            link: params.imageUrl,
-            caption: params.caption,
-          },
-        }),
-      ),
+          imageUrl: params.imageUrl,
+          caption: params.caption,
+        },
+      })),
     );
 
-    for (const [index, result] of results.entries()) {
-      if (result.status === "fulfilled") {
+    for (const [index, run] of result.runs.entries()) {
+      if (run.ok) {
         continue;
       }
 
@@ -67,7 +64,7 @@ async function sendImageBatch(params: {
       logger.error("Failed to send ONPE results image", {
         recipient,
         url: params.imageUrl,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        error: run.error,
       });
     }
   }

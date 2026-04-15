@@ -1,8 +1,7 @@
-import { env } from "@/env";
 import type { OnpeTopCount } from "@/lib/cache";
-import { kapsoClient } from "@/lib/kapso";
 import { sendLatestChartToRecipient } from "@/lib/onpe-images";
 import { setSenderActive, setSenderTopCount } from "@/lib/whatsapp-senders";
+import { sendKapsoMessage } from "@/trigger/send-kapso-message";
 
 const PAUSED_MESSAGE =
   "Envio pausado. si quieres volver a recibir updates, solo dinoslo";
@@ -14,11 +13,15 @@ const WELCOME_MESSAGE =
   "Hola. Este es el top 3 actual. Puedes elegir top 3 o top 5, pedirme el ultimo chart, pausar updates, o reactivarlos cuando quieras.";
 
 export async function sendTextReply(phoneNumber: string, body: string) {
-  await kapsoClient.messages.sendText({
-    phoneNumberId: env.KAPSO_PHONE_NUMBER_ID,
+  const sendResult = await sendKapsoMessage.triggerAndWait({
+    type: "text",
     to: phoneNumber,
     body,
   });
+
+  if (!sendResult.ok) {
+    throw sendResult.error;
+  }
 }
 
 export async function executeWhatsappAction(params: {
