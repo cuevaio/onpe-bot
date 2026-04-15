@@ -6,7 +6,7 @@ import { getCumulativeSenderCountSeries } from "@/lib/whatsapp-senders";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const IMAGE_WIDTH = 1400;
+const IMAGE_WIDTH = 1560;
 const IMAGE_HEIGHT = 820;
 const BACKGROUND = "#f5f4f1";
 const TEXT = "#262626";
@@ -16,7 +16,7 @@ const LINE = "#14532d";
 const FILL = "rgba(34, 197, 94, 0.18)";
 const MARGIN_TOP = 150;
 const MARGIN_RIGHT = 80;
-const MARGIN_BOTTOM = 120;
+const MARGIN_BOTTOM = 200;
 const MARGIN_LEFT = 140;
 const CHART_WIDTH = IMAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 const CHART_HEIGHT = IMAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
@@ -67,6 +67,10 @@ function formatDateLabel(value: string) {
   }).format(date);
 }
 
+function formatElapsedHoursLabel(hours: number) {
+  return Math.round(hours).toString();
+}
+
 function floorToHour(date: Date) {
   return new Date(Date.UTC(
     date.getUTCFullYear(),
@@ -79,14 +83,28 @@ function floorToHour(date: Date) {
   ));
 }
 
-function ceilToHour(date: Date) {
-  const floored = floorToHour(date);
+function floorToHalfHour(date: Date) {
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      date.getUTCHours(),
+      date.getUTCMinutes() < 30 ? 0 : 30,
+      0,
+      0,
+    ),
+  );
+}
+
+function ceilToHalfHour(date: Date) {
+  const floored = floorToHalfHour(date);
 
   if (floored.getTime() === date.getTime()) {
     return floored;
   }
 
-  return new Date(floored.getTime() + 60 * 60 * 1000);
+  return new Date(floored.getTime() + 30 * 60 * 1000);
 }
 
 function buildTicks(maxValue: number) {
@@ -144,42 +162,23 @@ export async function GET() {
     const firstTimestamp = new Date(firstPoint.timestamp);
     const lastTimestamp = new Date(lastPoint.timestamp);
     const timeRangeMs = Math.max(1, lastTimestamp.getTime() - firstTimestamp.getTime());
-    const xLabels = [] as { timestamp: string; x: number }[];
+    const totalElapsedHours = (lastTimestamp.getTime() - firstTimestamp.getTime()) / (60 * 60 * 1000);
+    const maxElapsedHour = Math.max(1, Math.ceil(totalElapsedHours));
+    const xLabelStep = maxElapsedHour <= 12 ? 1 : maxElapsedHour <= 24 ? 2 : 4;
+    const visibleLabels = [] as { elapsedHours: number; x: number }[];
 
-    for (
-      let tickDate = floorToHour(firstTimestamp);
-      tickDate.getTime() <= lastTimestamp.getTime();
-      tickDate = new Date(tickDate.getTime() + 2 * 60 * 60 * 1000)
-    ) {
-      const offsetMs = tickDate.getTime() - firstTimestamp.getTime();
+    for (let elapsedHours = 0; elapsedHours <= maxElapsedHour; elapsedHours += xLabelStep) {
+      const clampedHours = Math.min(elapsedHours, totalElapsedHours);
 
-      if (offsetMs < 0) {
-        continue;
-      }
-
-      xLabels.push({
-        timestamp: tickDate.toISOString(),
-        x: MARGIN_LEFT + (CHART_WIDTH * offsetMs) / timeRangeMs,
+      visibleLabels.push({
+        elapsedHours,
+        x: MARGIN_LEFT + (CHART_WIDTH * clampedHours) / Math.max(totalElapsedHours, 1),
       });
     }
 
-    if (xLabels.length === 0 || xLabels[0]?.x > MARGIN_LEFT + 1) {
-      xLabels.unshift({
-        timestamp: firstPoint.timestamp,
-        x: MARGIN_LEFT,
-      });
-    }
-
-    const hourCeiling = ceilToHour(lastTimestamp);
-
-    if (hourCeiling.getTime() - lastTimestamp.getTime() <= 30 * 60 * 1000) {
-      xLabels.push({
-        timestamp: hourCeiling.toISOString(),
-        x: MARGIN_LEFT + CHART_WIDTH,
-      });
-    } else if (xLabels.at(-1)?.x !== MARGIN_LEFT + CHART_WIDTH) {
-      xLabels.push({
-        timestamp: lastPoint.timestamp,
+    if (visibleLabels.at(-1)?.elapsedHours !== maxElapsedHour) {
+      visibleLabels.push({
+        elapsedHours: maxElapsedHour,
         x: MARGIN_LEFT + CHART_WIDTH,
       });
     }
@@ -300,24 +299,40 @@ export async function GET() {
             </svg>
           </div>
 
-          {xLabels.map((point, index) => (
+          {visibleLabels.map((point, index) => (
             <div
-              key={`${point.timestamp}-${index}`}
+              key={`${point.elapsedHours}-${index}`}
               style={{
                 position: "absolute",
-                left: point.x - 50,
-                top: MARGIN_TOP + CHART_HEIGHT + 22,
+                left: point.x - 28,
+                top: MARGIN_TOP + CHART_HEIGHT + 20,
                 display: "flex",
-                width: 100,
+                width: 56,
                 justifyContent: "center",
                 fontSize: 15,
                 fontWeight: 500,
                 color: MUTED,
               }}
             >
-              {formatDateLabel(point.timestamp)}
+              {formatElapsedHoursLabel(point.elapsedHours)}
             </div>
           ))}
+
+          <div
+            style={{
+              position: "absolute",
+              left: MARGIN_LEFT + CHART_WIDTH / 2 - 90,
+              top: IMAGE_HEIGHT - 42,
+              display: "flex",
+              width: 180,
+              justifyContent: "center",
+              fontSize: 18,
+              fontWeight: 500,
+              color: MUTED,
+            }}
+          >
+            Hours since first user
+          </div>
         </div>
       ),
       {
