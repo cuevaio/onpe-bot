@@ -1,4 +1,7 @@
+import { logger } from "@trigger.dev/sdk/v3";
+
 import type { OnpeTopCount } from "@/lib/cache";
+import { isKapsoOutside24HourWindowError } from "@/lib/kapso-errors";
 import { sendLatestChartToRecipient } from "@/lib/onpe-images";
 import { setSenderActive, setSenderTopCount } from "@/lib/whatsapp-senders";
 import { sendKapsoMessage } from "@/trigger/send-kapso-message";
@@ -20,8 +23,21 @@ export async function sendTextReply(phoneNumber: string, body: string) {
   });
 
   if (!sendResult.ok) {
+    if (isKapsoOutside24HourWindowError(sendResult.error)) {
+      logger.info("Skipped WhatsApp text reply outside session window", {
+        recipient: phoneNumber,
+        body,
+        skipReason: "outside_session_window",
+        error: sendResult.error,
+      });
+
+      return false;
+    }
+
     throw sendResult.error;
   }
+
+  return true;
 }
 
 export async function executeWhatsappAction(params: {

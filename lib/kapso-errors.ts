@@ -14,6 +14,11 @@ type KapsoLikeError = Error & {
   raw?: unknown;
 };
 
+type KapsoErrorRaw = {
+  error?: unknown;
+  nextSteps?: unknown;
+};
+
 export type KapsoErrorClassification = {
   retryable: boolean;
   kind: "rate_limit" | "server" | "network" | "client" | "unknown";
@@ -32,6 +37,38 @@ function normalizeRetryAfterMs(value: number | undefined) {
   }
 
   return Math.min(value, MAX_RETRY_DELAY_MS);
+}
+
+function getKapsoErrorMessage(error: KapsoLikeError) {
+  if (typeof error.message === "string" && error.message.length > 0) {
+    return error.message;
+  }
+
+  const raw = error.raw as KapsoErrorRaw | undefined;
+
+  if (raw && typeof raw.error === "string" && raw.error.length > 0) {
+    return raw.error;
+  }
+
+  return "";
+}
+
+export function isKapsoOutside24HourWindowError(error: unknown) {
+  const kapsoError = asKapsoError(error);
+
+  if (!kapsoError) {
+    return false;
+  }
+
+  const message = getKapsoErrorMessage(kapsoError).toLowerCase();
+  const raw = kapsoError.raw as KapsoErrorRaw | undefined;
+  const nextSteps =
+    raw && typeof raw.nextSteps === "string" ? raw.nextSteps.toLowerCase() : "";
+
+  return (
+    message.includes("cannot send non-template messages outside the 24-hour window") ||
+    nextSteps.includes("template message to reopen the session")
+  );
 }
 
 export function classifyKapsoError(error: unknown): KapsoErrorClassification {

@@ -2,6 +2,7 @@ import { logger, schemaTask } from "@trigger.dev/sdk/v3";
 import { z } from "zod";
 
 import type { OnpeTopCount } from "@/lib/cache";
+import { isKapsoOutside24HourWindowError } from "@/lib/kapso-errors";
 import { ensureLatestOnpeImageUrl } from "@/lib/onpe-images";
 import { getActiveBroadcastRecipients, getRecipientStates } from "@/lib/whatsapp-senders";
 import { sendKapsoMessage } from "@/trigger/send-kapso-message";
@@ -37,6 +38,7 @@ async function sendImageBatch(params: {
   imageUrl: string;
 }) {
   const failedRecipients: string[] = [];
+  const skippedRecipients: string[] = [];
 
   for (const recipientsBatch of chunkRecipients(
     params.recipients,
@@ -59,6 +61,20 @@ async function sendImageBatch(params: {
       }
 
       const recipient = recipientsBatch[index];
+
+      if (isKapsoOutside24HourWindowError(run.error)) {
+        skippedRecipients.push(recipient);
+
+        logger.info("Skipped ONPE results image outside WhatsApp session window", {
+          recipient,
+          url: params.imageUrl,
+          skipReason: "outside_session_window",
+          error: run.error,
+        });
+
+        continue;
+      }
+
       failedRecipients.push(recipient);
 
       logger.error("Failed to send ONPE results image", {
