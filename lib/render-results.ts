@@ -94,6 +94,8 @@ export type RenderEntry = OnpeResultEntry & {
 	partyLogoDataUri: string | null;
 	totalLabel: string;
 	percentageLabel: string;
+	deltaVotesLabel: string | null;
+	deltaPercentageLabel: string | null;
 };
 
 export type ChartTick = {
@@ -186,7 +188,32 @@ export function serializeRenderEntry(entry: RenderEntry) {
 		barTextColor: entry.barTextColor,
 		totalLabel: entry.totalLabel,
 		percentageLabel: entry.percentageLabel,
+		deltaVotesLabel: entry.deltaVotesLabel,
+		deltaPercentageLabel: entry.deltaPercentageLabel,
 	};
+}
+
+export function formatSignedVoteDelta(value: number) {
+	if (value === 0) {
+		return "+0";
+	}
+
+	const absolute = formatVoteCount(Math.abs(value));
+
+	return `${value > 0 ? "+" : "-"}${absolute}`;
+}
+
+export function formatSignedPercentageDelta(value: number) {
+	if (value === 0) {
+		return "+0%";
+	}
+
+	const absolute = new Intl.NumberFormat("en-US", {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	}).format(Math.abs(value));
+
+	return `${value > 0 ? "+" : "-"}${absolute}%`;
 }
 
 export function getBarStyle(entry: OnpeResultEntry, index: number): BarStyle {
@@ -333,6 +360,8 @@ export async function buildRenderEntry(
 		partyLogoDataUri,
 		totalLabel: formatVoteCount(entry.totalVotosValidos),
 		percentageLabel: formatPercentage(entry.porcentajeVotosValidos),
+		deltaVotesLabel: null,
+		deltaPercentageLabel: null,
 	};
 }
 
@@ -341,6 +370,7 @@ export function buildChartLayout(
 	entries: RenderEntry[],
 	summary: SummaryDisplay,
 ) {
+	const referenceEntry = entries[1] ?? null;
 	const maxVotes = Math.max(
 		...entries.map((entry) => entry.totalVotosValidos),
 		0,
@@ -368,6 +398,12 @@ export function buildChartLayout(
 		actasContabilizadas: summary.actasContabilizadas,
 		ticks,
 		bars: entries.map((entry, index) => {
+			const deltaVotes = referenceEntry
+				? entry.totalVotosValidos - referenceEntry.totalVotosValidos
+				: 0;
+			const deltaPercentage = referenceEntry
+				? entry.porcentajeVotosValidos - referenceEntry.porcentajeVotosValidos
+				: 0;
 			const x = groupLeft + index * (barWidth + barGap);
 			const barHeight =
 				maxVotes > 0
@@ -394,6 +430,12 @@ export function buildChartLayout(
 				percentageY,
 				photoY,
 				logoY,
+				deltaVotesLabel: referenceEntry
+					? formatSignedVoteDelta(deltaVotes)
+					: null,
+				deltaPercentageLabel: referenceEntry
+					? formatSignedPercentageDelta(deltaPercentage)
+					: null,
 				candidateLabel: truncateLabel(getFirstName(entry.nombreCandidato), 14),
 			};
 		}),

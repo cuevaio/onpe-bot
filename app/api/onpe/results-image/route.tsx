@@ -345,6 +345,29 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 					>
 						{entry.percentageLabel}
 					</div>
+					{entry.deltaVotesLabel && entry.deltaPercentageLabel ? (
+						<div
+							style={{
+								position: "absolute",
+								left: entry.centerX - barTextWidth / 2,
+								top: entry.barY + entry.barHeight - 82,
+								display: "flex",
+								flexDirection: "column",
+								alignItems: "center",
+								justifyContent: "center",
+								width: barTextWidth,
+								textAlign: "center",
+								fontSize: 18,
+								fontWeight: 600,
+								color: entry.barTextColor,
+							}}
+						>
+							<div style={{ display: "flex" }}>{entry.deltaVotesLabel}</div>
+							<div style={{ display: "flex", marginTop: 4 }}>
+								{entry.deltaPercentageLabel}
+							</div>
+						</div>
+					) : null}
 					{entry.partyLogoDataUri ? (
 						/* eslint-disable-next-line @next/next/no-img-element */
 						<img
