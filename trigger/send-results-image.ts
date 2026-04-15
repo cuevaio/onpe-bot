@@ -22,6 +22,18 @@ const onpeSendResultsImagePayloadSchema = z.object({
 
 const SEND_IMAGE_BATCH_SIZE = 100;
 
+function createTopCountMetrics() {
+  return {
+    3: { recipients: 0, sentRecipients: 0, skippedRecipients: 0, failedRecipients: 0 },
+    5: { recipients: 0, sentRecipients: 0, skippedRecipients: 0, failedRecipients: 0 },
+  } satisfies Record<OnpeTopCount, {
+    recipients: number;
+    sentRecipients: number;
+    skippedRecipients: number;
+    failedRecipients: number;
+  }>;
+}
+
 function chunkRecipients(recipients: string[], size: number) {
   const batches: string[][] = [];
 
@@ -38,6 +50,7 @@ async function sendImageBatch(params: {
   imageUrl: string;
 }) {
   const failedRecipients: string[] = [];
+  const skippedRecipients: string[] = [];
 
   for (const recipientsBatch of chunkRecipients(
     params.recipients,
@@ -55,13 +68,26 @@ async function sendImageBatch(params: {
     );
 
     for (const [index, run] of result.runs.entries()) {
+      const recipient = recipientsBatch[index];
+
       if (run.ok) {
+        if (!run.output?.delivered) {
+          skippedRecipients.push(recipient);
+
+          logger.info("Skipped ONPE results image outside WhatsApp session window", {
+            recipient,
+            url: params.imageUrl,
+            skipReason: "outside_session_window",
+            output: run.output,
+          });
+        }
+
         continue;
       }
 
-      const recipient = recipientsBatch[index];
-
       if (isKapsoOutside24HourWindowError(run.error)) {
+        skippedRecipients.push(recipient);
+
         logger.info("Skipped ONPE results image outside WhatsApp session window", {
           recipient,
           url: params.imageUrl,
@@ -84,6 +110,7 @@ async function sendImageBatch(params: {
 
   return {
     failedRecipients,
+    skippedRecipients,
   };
 }
 
@@ -93,6 +120,8 @@ export const sendOnpeResultsImage = schemaTask({
   maxDuration: 900,
   run: async ({ recipients, caption, imageUrl, topCount, imageUrlsByTopCount }) => {
     const failedRecipients: string[] = [];
+    const skippedRecipients: string[] = [];
+    const metricsByTopCount = createTopCountMetrics();
 
     if (recipients) {
       const recipientStates = await getRecipientStates(recipients);
@@ -112,22 +141,31 @@ export const sendOnpeResultsImage = schemaTask({
         imageUrl: resolvedImageUrl,
       });
       failedRecipients.push(...batchResult.failedRecipients);
+      skippedRecipients.push(...batchResult.skippedRecipients);
+      metricsByTopCount[recipientTopCount] = {
+        recipients: recipients.length,
+        sentRecipients: recipients.length - batchResult.failedRecipients.length - batchResult.skippedRecipients.length,
+        skippedRecipients: batchResult.skippedRecipients.length,
+        failedRecipients: batchResult.failedRecipients.length,
+      };
 
       logger.info("Sent ONPE results image", {
         recipients: recipients.length,
-        sent: recipients.length - failedRecipients.length,
-        skipped: 0,
+        sent: recipients.length - failedRecipients.length - skippedRecipients.length,
+        skipped: skippedRecipients.length,
         failed: failedRecipients.length,
         url: resolvedImageUrl,
         topCount: recipientTopCount,
+        metricsByTopCount,
       });
 
       return {
         recipients: recipients.length,
-        sentRecipients: recipients.length - failedRecipients.length,
-        skippedRecipients: 0,
+        sentRecipients: recipients.length - failedRecipients.length - skippedRecipients.length,
+        skippedRecipients: skippedRecipients.length,
         failedRecipients: failedRecipients.length,
         url: resolvedImageUrl,
+        metricsByTopCount,
       };
     }
 
@@ -152,6 +190,24 @@ export const sendOnpeResultsImage = schemaTask({
         imageUrl: resolvedImageUrl,
       });
       failedRecipients.push(...batchResult.failedRecipients);
+      skippedRecipients.push(...batchResult.skippedRecipients);
+      metricsByTopCount[currentTopCount] = {
+        recipients: recipientsForTopCount.length,
+        sentRecipients:
+          recipientsForTopCount.length -
+          batchResult.failedRecipients.length -
+          batchResult.skippedRecipients.length,
+        skippedRecipients: batchResult.skippedRecipients.length,
+        failedRecipients: batchResult.failedRecipients.length,
+      };
+    }
+
+    const skippedRecipientsFromWindow = skippedRecipients.length;
+    const recipientStates = await getRecipientStates(resolvedRecipients.skippedRecipients);
+
+    for (const recipientState of recipientStates) {
+      metricsByTopCount[recipientState.preferredTopCount].recipients += 1;
+      metricsByTopCount[recipientState.preferredTopCount].skippedRecipients += 1;
     }
 
     logger.info("Sent ONPE results image", {
@@ -159,10 +215,13 @@ export const sendOnpeResultsImage = schemaTask({
       sent:
         resolvedRecipients.groupedRecipients[3].length +
         resolvedRecipients.groupedRecipients[5].length -
-        failedRecipients.length,
-      skipped: resolvedRecipients.skippedRecipients.length,
+        failedRecipients.length -
+        skippedRecipients.length,
+      skipped: resolvedRecipients.skippedRecipients.length + skippedRecipients.length,
       failed: failedRecipients.length,
-      urls: Object.fromEntries(sentUrls),
+      urlsByTopCount: Object.fromEntries(sentUrls),
+      metricsByTopCount,
+      skippedRecipientsFromWindow,
     });
 
     return {
@@ -170,10 +229,12 @@ export const sendOnpeResultsImage = schemaTask({
       sentRecipients:
         resolvedRecipients.groupedRecipients[3].length +
         resolvedRecipients.groupedRecipients[5].length -
-        failedRecipients.length,
-      skippedRecipients: resolvedRecipients.skippedRecipients.length,
+        failedRecipients.length -
+        skippedRecipients.length,
+      skippedRecipients: resolvedRecipients.skippedRecipients.length + skippedRecipients.length,
       failedRecipients: failedRecipients.length,
       url: sentUrls.get(3) ?? sentUrls.get(5) ?? null,
+      metricsByTopCount,
     };
   },
 });

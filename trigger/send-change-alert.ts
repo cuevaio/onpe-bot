@@ -32,6 +32,7 @@ export const sendOnpeChangeAlert = schemaTask({
       sentRecipients: sendResult.output.sentRecipients,
       skippedRecipients: sendResult.output.skippedRecipients,
       failedRecipients: sendResult.output.failedRecipients,
+      metricsByTopCount: sendResult.output.metricsByTopCount,
     });
 
     return {
@@ -40,6 +41,7 @@ export const sendOnpeChangeAlert = schemaTask({
       skippedRecipients: sendResult.output.skippedRecipients,
       failedRecipients: sendResult.output.failedRecipients,
       url: sendResult.output.url,
+      metricsByTopCount: sendResult.output.metricsByTopCount,
     };
   },
 });
