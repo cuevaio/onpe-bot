@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { normalizeWebhook } from "@kapso/whatsapp-cloud-api/server";
+import { tasks } from "@trigger.dev/sdk/v3";
 
 import { env } from "@/env";
 import {
@@ -11,7 +12,6 @@ import { handleInboundMessageWithAgent } from "@/lib/whatsapp-agent";
 import { kapsoClient } from "@/lib/kapso";
 import { registerWebhookDelivery } from "@/lib/kapso-webhook-deliveries";
 import { getSenderState } from "@/lib/whatsapp-senders";
-import { processKapsoWebhookReply } from "@/trigger/process-webhook-reply";
 
 type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
 type NormalizedKapsoMessage = {
@@ -532,7 +532,8 @@ export async function POST(request: Request) {
 			executableAction = resolvedAction;
 		}
 
-		const handoffResult = await processKapsoWebhookReply.triggerAndWait(
+		await tasks.trigger(
+			"process-kapso-webhook-reply",
 			{
 				idempotencyKey,
 				phoneNumber: selectedProcessedEntry.phoneNumber,
@@ -547,10 +548,6 @@ export async function POST(request: Request) {
 			},
 		);
 
-		if (!handoffResult.ok) {
-			throw handoffResult.error;
-		}
-
 		logWebhookEvent("reply_handed_off", {
 			idempotencyKey,
 			phoneNumber: selectedProcessedEntry.phoneNumber,
@@ -558,7 +555,6 @@ export async function POST(request: Request) {
 			deliveryKey: selectedProcessedEntry.deliveryKey,
 			action: executableAction,
 			senderInserted: selectedProcessedEntry.senderInserted,
-			taskStatus: handoffResult.output.status,
 			selectedEntryIndex: selectedProcessedEntry.index,
 		});
 	} catch (error) {
