@@ -11,7 +11,7 @@ import {
 import { handleInboundMessageWithAgent } from "@/lib/whatsapp-agent";
 import { kapsoClient } from "@/lib/kapso";
 import { registerWebhookDelivery } from "@/lib/kapso-webhook-deliveries";
-import { getSenderState } from "@/lib/whatsapp-senders";
+import { ensureSenderRegistered, getSenderState } from "@/lib/whatsapp-senders";
 
 type ConversationMessage = Parameters<typeof handleInboundMessageWithAgent>[0]["recentMessages"][number];
 type NormalizedKapsoMessage = {
@@ -412,11 +412,14 @@ export async function POST(request: Request) {
 		for (const entry of inboundEntries) {
 			const deliveryKey = buildDeliveryKey(idempotencyKey, entry);
 			const senderState = await getSenderState(entry.phoneNumber);
+			const senderInserted = senderState
+				? false
+				: await ensureSenderRegistered(entry.phoneNumber);
 			const registration = await registerWebhookDelivery({
 				idempotencyKey: deliveryKey,
 				eventType,
 				phoneNumber: entry.phoneNumber,
-				senderInsertedAtDelivery: !senderState,
+				senderInsertedAtDelivery: senderInserted,
 			});
 
 			processedEntries.push({

@@ -49,6 +49,18 @@ export async function getSenderState(phoneNumber: string): Promise<SenderState |
   };
 }
 
+export async function ensureSenderRegistered(phoneNumber: string) {
+  const db = getDb();
+
+  const insertedRows = await db
+    .insert(whatsappSenders)
+    .values({ phoneNumber })
+    .onConflictDoNothing()
+    .returning({ phoneNumber: whatsappSenders.phoneNumber });
+
+  return insertedRows.length > 0;
+}
+
 export async function setSenderActive(phoneNumber: string, active: boolean) {
   const db = getDb();
 
