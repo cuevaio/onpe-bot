@@ -194,7 +194,7 @@ export function getBarStyle(entry: OnpeResultEntry, index: number): BarStyle {
 		"8": { fill: "#f47c20", text: "#ffffff" },
 		"35": { fill: "#3a7dc0", text: "#ffffff" },
 		"10": { fill: "#31b44b", text: "#ffffff" },
-		"16": { fill: "#FDDA0D", text: "#ffffff" },
+		"16": { fill: "#f2c230", text: "#473300" },
 		"14": { fill: "#5a5a5a", text: "#ffffff" },
 	};
 	const fallback: BarStyle[] = [
