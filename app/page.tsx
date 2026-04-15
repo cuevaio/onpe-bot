@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 
-const PHONE_NUMBER_DISPLAY = "+1 (208) 361-7414";
-const PHONE_NUMBER_PLAIN = "12083617414";
+const PHONE_NUMBER_DISPLAY = "+1 201-277-2422";
+const PHONE_NUMBER_PLAIN = "12012772422";
 
 const copy = {
   es: {
@@ -19,6 +19,7 @@ const copy = {
       description:
         "ONPE es la entidad que contabiliza los votos en Peru. Este bot toma su ultimo conteo publicado y te envia la imagen actualizada por WhatsApp.",
       ctaLabel: "WhatsApp",
+      ctaNotice: "Meta baneo nuestro numero anterior. Escribenos a este numero nuevo por favor.",
       ctaHint: "Escribe una vez. Quedas registrado para recibir nuevas actualizaciones oficiales cuando ONPE publique cambios.",
     },
     metric: {
@@ -55,6 +56,7 @@ const copy = {
       description:
         "ONPE is the public institution that counts votes in Peru. This bot takes its latest published count and sends you the current image over WhatsApp.",
       ctaLabel: "WhatsApp",
+      ctaNotice: "Meta banned our previous number, message this new number please.",
       ctaHint: "Send one message. You stay registered for future official updates whenever ONPE publishes a new count.",
     },
     metric: {
@@ -209,6 +211,7 @@ export default async function Home({ searchParams }: HomePageProps) {
                   {PHONE_NUMBER_DISPLAY}
                 </span>
               </a>
+              <p className="max-w-[34rem] text-[13px] leading-6 text-white/62">{content.hero.ctaNotice}</p>
               <p className="max-w-[34rem] text-[13px] leading-6 text-white/42">{content.hero.ctaHint}</p>
             </div>
 
