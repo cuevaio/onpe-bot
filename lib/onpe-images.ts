@@ -1,8 +1,5 @@
-import { logger } from "@trigger.dev/sdk/v3";
-
 import type { OnpeTopCount } from "@/lib/cache";
 import { getLatestOnpeImageUrl } from "@/lib/cache";
-import { isKapsoOutside24HourWindowError } from "@/lib/kapso-errors";
 import { formatOnpeUpdateTimestamp, LATEST_SNAPSHOT_URL, LATEST_SUMMARY_URL, onpeSummaryMetadataSchema } from "@/lib/onpe";
 import { renderOnpeResultsImage } from "@/trigger/render-results-image";
 import { sendKapsoMessage } from "@/trigger/send-kapso-message";
@@ -98,18 +95,6 @@ export async function sendLatestChartToRecipient(params: {
   });
 
   if (!sendResult.ok) {
-    if (isKapsoOutside24HourWindowError(sendResult.error)) {
-      logger.info("Skipped latest chart send outside WhatsApp session window", {
-        recipient: params.phoneNumber,
-        topCount: params.topCount,
-        imageUrl,
-        skipReason: "outside_session_window",
-        error: sendResult.error,
-      });
-
-      return null;
-    }
-
     throw sendResult.error;
   }
 

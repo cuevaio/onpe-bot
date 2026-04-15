@@ -38,7 +38,6 @@ async function sendImageBatch(params: {
   imageUrl: string;
 }) {
   const failedRecipients: string[] = [];
-  const skippedRecipients: string[] = [];
 
   for (const recipientsBatch of chunkRecipients(
     params.recipients,
@@ -63,8 +62,6 @@ async function sendImageBatch(params: {
       const recipient = recipientsBatch[index];
 
       if (isKapsoOutside24HourWindowError(run.error)) {
-        skippedRecipients.push(recipient);
-
         logger.info("Skipped ONPE results image outside WhatsApp session window", {
           recipient,
           url: params.imageUrl,
@@ -85,7 +82,9 @@ async function sendImageBatch(params: {
     }
   }
 
-  return failedRecipients;
+  return {
+    failedRecipients,
+  };
 }
 
 export const sendOnpeResultsImage = schemaTask({
@@ -107,13 +106,12 @@ export const sendOnpeResultsImage = schemaTask({
       const recipientTopCount = topCount ?? recipientStates[0]?.preferredTopCount ?? 3;
       const resolvedImageUrl = imageUrl ?? (await ensureLatestOnpeImageUrl(recipientTopCount));
 
-      failedRecipients.push(
-        ...(await sendImageBatch({
-          recipients,
-          caption,
-          imageUrl: resolvedImageUrl,
-        })),
-      );
+      const batchResult = await sendImageBatch({
+        recipients,
+        caption,
+        imageUrl: resolvedImageUrl,
+      });
+      failedRecipients.push(...batchResult.failedRecipients);
 
       logger.info("Sent ONPE results image", {
         recipients: recipients.length,
@@ -148,13 +146,12 @@ export const sendOnpeResultsImage = schemaTask({
         imageUrlsByTopCount?.[currentTopCount] ??
         (await ensureLatestOnpeImageUrl(currentTopCount));
       sentUrls.set(currentTopCount, resolvedImageUrl);
-      failedRecipients.push(
-        ...(await sendImageBatch({
-          recipients: recipientsForTopCount,
-          caption,
-          imageUrl: resolvedImageUrl,
-        })),
-      );
+      const batchResult = await sendImageBatch({
+        recipients: recipientsForTopCount,
+        caption,
+        imageUrl: resolvedImageUrl,
+      });
+      failedRecipients.push(...batchResult.failedRecipients);
     }
 
     logger.info("Sent ONPE results image", {

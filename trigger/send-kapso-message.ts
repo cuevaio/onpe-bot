@@ -5,6 +5,7 @@ import { env } from "@/env";
 import {
   classifyKapsoError,
   getKapsoRetryDelayMs,
+  isKapsoOutside24HourWindowError,
   serializeKapsoError,
 } from "@/lib/kapso-errors";
 import { kapsoClient } from "@/lib/kapso";
@@ -89,5 +90,21 @@ export const sendKapsoMessage = schemaTask({
     }
 
     throw new Error("Kapso message send exhausted retries");
+  },
+  catchError: async ({ payload, error }) => {
+    if (!isKapsoOutside24HourWindowError(error)) {
+      return;
+    }
+
+    logger.info("Skipping retries for Kapso message outside WhatsApp session window", {
+      type: payload.type,
+      to: payload.to,
+      skipReason: "outside_session_window",
+      error: serializeKapsoError(error),
+    });
+
+    return {
+      skipRetrying: true,
+    };
   },
 });
