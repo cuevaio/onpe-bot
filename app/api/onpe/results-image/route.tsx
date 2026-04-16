@@ -243,8 +243,8 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 					background: "#bbbbbb",
 				}}
 			/>
-      {layout.ticks.map((tick) => (
-        <div key={`tick-${tick.value}`} style={{ display: "flex" }}>
+			{layout.ticks.map((tick) => (
+				<div key={`tick-${tick.value}`} style={{ display: "flex" }}>
 					<div
 						style={{
 							position: "absolute",
@@ -254,24 +254,24 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 							borderTop: `2px dashed ${GRID_COLOR}`,
 						}}
 					/>
-          {tick.value > 0 ? (
-            <div
-              style={{
-                position: "absolute",
-                left: CHART_LEFT - 160,
-                top: tick.y - 14,
-                display: "flex",
-                width: 140,
-                textAlign: "right",
-                fontSize: 23,
-                fontWeight: 500,
-              }}
-            >
-              {formatVoteCount(tick.value)}
-            </div>
-          ) : null}
-        </div>
-      ))}
+					{tick.value > 0 ? (
+						<div
+							style={{
+								position: "absolute",
+								left: CHART_LEFT - 160,
+								top: tick.y - 14,
+								display: "flex",
+								width: 140,
+								textAlign: "right",
+								fontSize: 23,
+								fontWeight: 500,
+							}}
+						>
+							{formatVoteCount(tick.value)}
+						</div>
+					) : null}
+				</div>
+			))}
 			{layout.bars.map((entry, index) => (
 				<div
 					key={`${entry.codigoAgrupacionPolitica}-${index}`}
@@ -400,40 +400,40 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 					</div>
 				</div>
 			))}
-      <div
-        style={{
-          position: "absolute",
-          left: 38,
-          bottom: 28,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          width: 140,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            fontSize: 15,
-            fontWeight: 600,
-            color: "#606060",
-            marginBottom: 8,
-          }}
-        >
-          Buy me a chicha. Yape:
-        </div>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={donationQrDataUri}
-          alt="Yape QR"
-          width={114}
-          height={114}
-          style={{
-            display: "flex",
-            borderRadius: 8,
-          }}
-        />
-      </div>
+			<div
+				style={{
+					position: "absolute",
+					left: 38,
+					bottom: 28,
+					display: "flex",
+					flexDirection: "column",
+					alignItems: "flex-start",
+					width: 140,
+				}}
+			>
+				<div
+					style={{
+						display: "flex",
+						fontSize: 15,
+						fontWeight: 600,
+						color: "#606060",
+						marginBottom: 8,
+					}}
+				>
+					Buy me a chicha. Yape:
+				</div>
+				{/* eslint-disable-next-line @next/next/no-img-element */}
+				<img
+					src={donationQrDataUri}
+					alt="Yape QR"
+					width={114}
+					height={114}
+					style={{
+						display: "flex",
+						borderRadius: 8,
+					}}
+				/>
+			</div>
 			<div
 				style={{
 					position: "absolute",
@@ -448,7 +448,7 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 				}}
 			>
 				<div style={{ display: "flex", marginBottom: 4 }}>
-					+1 (201) 277-5162
+					+1 (201) 277-8569
 				</div>
 				elecciones.cueva.io
 			</div>

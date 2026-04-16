@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 
-const PHONE_NUMBER_DISPLAY = "+1 (201) 277-5162";
-const PHONE_NUMBER_PLAIN = "12012775162";
+const PHONE_NUMBER_DISPLAY = "+1 (201) 277-8569";
+const PHONE_NUMBER_PLAIN = "12012778569";
 
 const copy = {
 	es: {
