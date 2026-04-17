@@ -26,6 +26,7 @@ import {
 	parseSnapshotEntries,
 	TEXT_COLOR,
 } from "@/lib/render-results";
+import { SPONSORS } from "@/lib/sponsors";
 
 export const runtime = "nodejs";
 export const maxDuration = 800;
@@ -400,6 +401,54 @@ async function renderImageResponse(payload: OnpeResultsImagePayload) {
 					</div>
 				</div>
 			))}
+			<div
+				style={{
+					position: "absolute",
+					right: 40,
+					top: 160,
+					display: "flex",
+					flexDirection: "column",
+					alignItems: "flex-end",
+					width: 220,
+					textAlign: "right",
+				}}
+			>
+				<div
+					style={{
+						display: "flex",
+						fontSize: 18,
+						fontWeight: 700,
+						marginBottom: 6,
+					}}
+				>
+					Sponsors
+				</div>
+				<div
+					style={{
+						display: "flex",
+						fontSize: 13,
+						fontWeight: 500,
+						color: "#606060",
+						marginBottom: 8,
+					}}
+				>
+					Este proyecto existe gracias a ustedes &lt;3.
+				</div>
+				{SPONSORS.map((sponsor) => (
+					<div
+						key={sponsor}
+						style={{
+							display: "flex",
+							fontSize: 12,
+							fontWeight: 500,
+							color: "#606060",
+							marginTop: 2,
+						}}
+					>
+						{sponsor}
+					</div>
+				))}
+			</div>
 			<div
 				style={{
 					position: "absolute",
