@@ -7,7 +7,11 @@ import {
   type OnpeSummaryMetadata,
 } from "@/lib/onpe";
 import { ensureLatestOnpeImageUrl, hasLatestOnpeImageUrl } from "@/lib/onpe-images";
-import { parseSnapshotEntries } from "@/lib/render-results";
+import {
+  buildRenderSignificantSnapshotData,
+  hasRenderSignificantChange,
+  parseSnapshotEntries,
+} from "@/lib/render-results";
 import { fetchOnpeSnapshot } from "@/trigger/fetch-snapshot";
 import { loadOnpeSnapshots } from "@/trigger/load-snapshots";
 import { renderOnpeResultsImage } from "@/trigger/render-results-image";
@@ -139,7 +143,7 @@ async function sendLatestOnpeChangeAlert(params: {
 
 export const monitorOnpeElection = schedules.task({
   id: "monitor-onpe-election",
-  cron: "*/10 * * * *",
+  cron: "0 */2 * * *",
   maxDuration: 300,
   queue: {
     concurrencyLimit: 1,
@@ -158,7 +162,7 @@ export const monitorOnpeElection = schedules.task({
       throw loadSnapshotsResult.error;
     }
 
-    const { latestSummary, previousSummary } = loadSnapshotsResult.output;
+    const { latestSummary, previousSnapshot, previousSummary } = loadSnapshotsResult.output;
 
     if (previousSummary === null) {
       const storeResult = await storeLatestOnpeData(latestSummary);
@@ -240,6 +244,20 @@ export const monitorOnpeElection = schedules.task({
       storeResult.snapshot,
     );
 
+    const shouldSendAlert =
+      previousSummary === null ||
+      previousSnapshot === null ||
+      hasRenderSignificantChange(
+        buildRenderSignificantSnapshotData({
+          snapshot: previousSnapshot,
+          actasContabilizadas: previousSummary.actasContabilizadas,
+        }),
+        buildRenderSignificantSnapshotData({
+          snapshot: storeResult.snapshot,
+          actasContabilizadas: latestSummary.actasContabilizadas,
+        }),
+      );
+
     logger.warn("ONPE snapshot changed", {
       fechaActualizacion: latestSummary.fechaActualizacion,
       actasContabilizadas: latestSummary.actasContabilizadas,
@@ -247,16 +265,27 @@ export const monitorOnpeElection = schedules.task({
       snapshotPath: LATEST_SNAPSHOT_PATH,
       summaryPath: LATEST_SUMMARY_PATH,
       imageDirectory: RESULTS_IMAGE_DIRECTORY,
+      shouldSendAlert,
     });
 
     const updatedAt = imageResult[0].updatedAt;
-    await sendLatestOnpeChangeAlert({
-      updatedAt,
-      imageUrlsByTopCount: getImageUrlsByTopCount(imageResult),
-    });
+
+    if (shouldSendAlert) {
+      await sendLatestOnpeChangeAlert({
+        updatedAt,
+        imageUrlsByTopCount: getImageUrlsByTopCount(imageResult),
+      });
+    } else {
+      logger.info("Skipping ONPE alert because only the timestamp changed", {
+        fechaActualizacion: latestSummary.fechaActualizacion,
+        actasContabilizadas: latestSummary.actasContabilizadas,
+        imageDirectory: RESULTS_IMAGE_DIRECTORY,
+      });
+    }
 
     return {
       changed: true,
+      alertSent: shouldSendAlert,
       initialized: false,
       updatedAt,
     };

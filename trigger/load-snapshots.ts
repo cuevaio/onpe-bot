@@ -1,6 +1,7 @@
 import { task } from "@trigger.dev/sdk/v3";
 
 import { fetchOnpeSummaryMetadata } from "@/trigger/fetch-summary-metadata";
+import { readOnpeSnapshot } from "@/trigger/read-snapshot";
 import { readOnpeSummaryMetadata } from "@/trigger/read-summary-metadata";
 
 export const loadOnpeSnapshots = task({
@@ -19,9 +20,16 @@ export const loadOnpeSnapshots = task({
       throw previousSummaryResult.error;
     }
 
+    const previousSnapshotResult = await readOnpeSnapshot.triggerAndWait();
+
+    if (!previousSnapshotResult.ok) {
+      throw previousSnapshotResult.error;
+    }
+
     return {
       latestSummary: latestSummaryResult.output.summary,
       latestBytes: latestSummaryResult.output.bytes,
+      previousSnapshot: previousSnapshotResult.output.snapshot,
       previousSummary: previousSummaryResult.output.summary,
     };
   },

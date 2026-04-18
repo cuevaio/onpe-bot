@@ -4,7 +4,7 @@ WhatsApp bot that monitors ONPE presidential results, regenerates a latest chart
 
 ## How It Works
 
-1. `trigger/monitor-election.ts` runs every 2 minutes.
+1. `trigger/monitor-election.ts` runs every 2 hours.
 2. It fetches ONPE summary data from `resumen-general/totales`.
 3. It compares `fechaActualizacion` against the last stored summary blob.
 4. When ONPE publishes a new update, it:
@@ -12,7 +12,7 @@ WhatsApp bot that monitors ONPE presidential results, regenerates a latest chart
    - stores `onpe/latest.json`
    - stores `onpe/latest-summary.json`
    - regenerates `onpe/charts/chart-latest.png`
-   - sends a WhatsApp broadcast
+   - sends a WhatsApp broadcast only if the visible chart data changed
 5. The chart image shows:
    - top 3 candidates
    - valid votes and vote percentages
@@ -113,5 +113,5 @@ Key tasks:
 
 - ONPE freshness is determined only by `fechaActualizacion`.
 - The image uses `actasContabilizadas` from the summary endpoint as the main headline stat.
-- The latest image is regenerated immediately after each detected ONPE update and on first initialization.
+- The latest image is regenerated immediately after each detected ONPE update and on first initialization, even when a broadcast is skipped because only the timestamp changed.
 - The latest generated image URL is cached in Upstash Redis and reused for new-user welcome messages.

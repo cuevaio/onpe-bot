@@ -27,7 +27,7 @@ This repo uses `next@16.2.3` and `react@19.2.4`. Read the relevant guide in `nod
 
 - This is a single-package Next.js app, not a monorepo.
 - `app/api/webhooks/kapso/route.ts` is the real inbound entrypoint. It verifies Kapso signatures, deduplicates deliveries, registers phone numbers, and sends the latest image to first-time senders.
-- `trigger/monitor-election.ts` is the main orchestration task. It polls ONPE every 5 minutes, compares `fechaActualizacion`, persists the latest snapshot/summary, regenerates the chart image, and triggers outbound alerts.
+- `trigger/monitor-election.ts` is the main orchestration task. It polls ONPE every 2 hours, compares `fechaActualizacion`, persists the latest snapshot/summary, regenerates the chart image, and triggers outbound alerts only when the visible chart data changed.
 - `trigger/` contains the operational workflow. Read those tasks before changing ONPE fetch, image generation, or broadcast behavior.
 - `lib/onpe.ts` is the source of truth for ONPE endpoints, blob paths, request headers, and freshness semantics.
 - `db/schema.ts` defines the only current tables: `whatsapp_senders` and `kapso_webhook_deliveries`.

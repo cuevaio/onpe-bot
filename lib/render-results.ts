@@ -108,6 +108,20 @@ export type SummaryDisplay = {
 	fechaActualizacion: number;
 };
 
+export type RenderSignificantSnapshotEntry = Pick<
+	OnpeResultEntry,
+	| "codigoAgrupacionPolitica"
+	| "dniCandidato"
+	| "nombreCandidato"
+	| "totalVotosValidos"
+	| "porcentajeVotosValidos"
+>;
+
+export type RenderSignificantSnapshotData = {
+	entries: RenderSignificantSnapshotEntry[];
+	actasContabilizadas: number;
+};
+
 export type AssetKind = "candidate photo" | "party logo";
 
 export function buildCandidatePhotoUrl(dniCandidato: string) {
@@ -312,6 +326,51 @@ export function parseSnapshotEntries(snapshot: string, topCount: 3 | 5 = 3) {
 		),
 		entries: candidateEntries.slice(0, topCount),
 	};
+}
+
+export function buildRenderSignificantSnapshotData(params: {
+	snapshot: string;
+	actasContabilizadas: number;
+	topCount?: 3 | 5;
+}): RenderSignificantSnapshotData {
+	const topCount = params.topCount ?? 5;
+	const parsed = parseSnapshotEntries(params.snapshot, topCount);
+
+	return {
+		actasContabilizadas: params.actasContabilizadas,
+		entries: parsed.entries.map((entry) => ({
+			codigoAgrupacionPolitica: entry.codigoAgrupacionPolitica,
+			dniCandidato: entry.dniCandidato,
+			nombreCandidato: entry.nombreCandidato,
+			totalVotosValidos: entry.totalVotosValidos,
+			porcentajeVotosValidos: entry.porcentajeVotosValidos,
+		})),
+	};
+}
+
+export function hasRenderSignificantChange(
+	previous: RenderSignificantSnapshotData,
+	latest: RenderSignificantSnapshotData,
+) {
+	if (previous.actasContabilizadas !== latest.actasContabilizadas) {
+		return true;
+	}
+
+	if (previous.entries.length !== latest.entries.length) {
+		return true;
+	}
+
+	return previous.entries.some((entry, index) => {
+		const nextEntry = latest.entries[index];
+
+		return (
+			entry.codigoAgrupacionPolitica !== nextEntry.codigoAgrupacionPolitica ||
+			entry.dniCandidato !== nextEntry.dniCandidato ||
+			entry.nombreCandidato !== nextEntry.nombreCandidato ||
+			entry.totalVotosValidos !== nextEntry.totalVotosValidos ||
+			entry.porcentajeVotosValidos !== nextEntry.porcentajeVotosValidos
+		);
+	});
 }
 
 export async function fetchAssetDataUri(url: string, kind: AssetKind) {
