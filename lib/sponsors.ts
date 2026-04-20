@@ -7,4 +7,5 @@ export const SPONSORS = [
 	"Sebastian B.",
 	"Juan Diego O.",
 	"Victor I.",
+	"Edrik V.",
 ];
